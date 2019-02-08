@@ -1,5 +1,4 @@
 function Q = getQ(R,T,cr)
-
 for r = 0:R
    for i =0:R
        for l = 0:R

@@ -17,4 +17,3 @@ end
 
 % Solve the QP
 [x,fval,exitflag] = quadprog(2*H,f',Ain,bin,Aeq,beq,[],[],[],options);
-hola = 1;

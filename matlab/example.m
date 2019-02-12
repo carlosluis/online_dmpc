@@ -22,19 +22,19 @@ E1 = E^(-1);
 E2 = E^(-order);
 
 % Bezier curve parameters. Note that d > deg_poly always
-deg_poly = 2; % degree of differentiability required for the position
+deg_poly = 4; % degree of differentiability required for the position
 l = 3;  % number of Bezier curves to concatenate
 d = 5;  % degree of the bezier curve
 
 N = 1; % number of vehicles
 
 % Workspace boundaries
-pmin = [-2.5,-2.5,0.2];
-pmax = [2.5,2.5,2.2];
+pmin = [-5,-5,0.2];
+pmax = [5,5,2.2];
 
 % Acceleration limits
-amax = 1;
-amin = -1;
+amax = 10;
+amin = -10;
 
 % Minimum distance between vehicles in m
 rmin_init = 0.75;
@@ -43,47 +43,26 @@ rmin_init = 0.75;
 % [po,pf] = randomTest(N,pmin,pmax,rmin_init);
 
 % Initial positions
-po1 = [1.0,1.0,1.5];
+po1 = [0.0,1.0,1.5];
 po2 = [-1.5,-1.5,1.5];
 po3 = [-1.5,1.5,1.5];
 po4 = [1.5,-1.5,1.5];
 po = cat(3,po1);
 
 % Final positions
-pf1 = [2.0,1.0,1.5];
+pf1 = [1.0,1.0,1.5];
 pf2 = [1.5,1.5,1.5];
 pf3 = [1.5,-1.5,1.5];
 pf4 = [-1.5,1.5,1.5];
 pf  = cat(3,pf1);
 
 %% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES
-
-% Define model parameters for the quad + controller system
-zeta_xy = 0.6502;
-tau_xy = 0.3815;
-omega_xy = 1/tau_xy;
-zeta_z = 0.9103;
-tau_z = 0.3;
-omega_z = 1/tau_z;
-
-% Matrices of the discrete state space model
-% State = [x y z vx vy vz]
-A = [1  0 0 h 0 0;
-     0 1 0 0 h 0;
-     0 0 1 0 0 h;
-     -h*omega_xy^2 0 0 -2*omega_xy*h*zeta_xy 0 0;
-     0 -h*omega_xy^2 0 0 -2*omega_xy*h*zeta_xy 0;
-     0 0 -h*omega_xy^2 0 0 -2*omega_xy*h*zeta_xy];
+[A,B] = getABmodel(h);
  
-B = [zeros(3,3);
-     h*omega_xy^2 0 0;
-     0 h*omega_xy^2 0;
-     0 0 h*omega_xy^2]; 
- 
-Lambda = getLambda(A,B,k_hor);
+[Lambda, Lambda_vel] = getLambda(A,B,k_hor);
 Lambda_K = Lambda(end-2:end,:); % to be used in the cost function
 
-A0 = getA0(A,k_hor);
+[A0, A0_vel] = getA0(A,k_hor);
 A0_K = A0(end-2:end,:);
 
 %% CONSTRUCT MATRICES TO WORK WITH BEZIER CURVES
@@ -108,7 +87,7 @@ Gamma = blkdiag(kron(eye(l-1),Tau3d_k),Tau3d_all);
 
 % Construct matrix Q: Hessian for each of the polynomial derivatives
 cr = zeros(1,d+1); % weights on degree of derivative deg = [0 1 ... d]
-cr(5) = .01;
+cr(5) = .0001;
 Q = getQ(d,T_segment,cr);
 Q = sum(Q,3);
 
@@ -124,10 +103,11 @@ H_snap = Beta'*Alpha*Beta;
 
 % For the trajectory tracking error cost function, define a weight matrix S
 s = 100;
-spd = 1;
+spd = 3;
 S = s*[zeros(3*(k_hor-spd),3*k_hor);
        zeros(3*spd,3*(k_hor-spd)) eye(3*spd)];
 Phi = Lambda*Gamma*Beta;
+Phi_vel = Lambda_vel*Gamma*Beta;
 H_err = Phi'*S*Phi;
 
 % The complete Hessian is simply the sum of the two
@@ -177,7 +157,7 @@ Beta_acc = kron(eye(l),delta_acc_3d);
 
 % Define Tau_acc that evaluates the polynomial at different times
 % Define the times at which we desire to sample between 0s and 2.4s
-t_sample_acc = 0:(h):((k_hor-1)*h);
+t_sample_acc = 0:(4*h):((k_hor-1)*h);
 Tau_acc = getTauSamples(T_segment,t_sample_acc,d-2,l);
 
 % Now we compose the constraint in (A,b) form to pass to the solver
@@ -189,7 +169,7 @@ b_in_acc = [amax*ones(3*length(t_sample_acc),1);
            -amin*ones(3*length(t_sample_acc),1)];
 
 % POSITION REFERENCE CONSTRAINT - WORKSPACE BOUNDARIES
-t_sample_pos_ref = 0:(h):((k_hor-1)*h);
+t_sample_pos_ref = 0:(4*h):((k_hor-1)*h);
 Tau_pos_ref = getTauSamples(T_segment,t_sample_pos_ref,d,l);
 
 % Now we compose the constraint in (A,b) form to pass to the solver
@@ -246,27 +226,122 @@ end
 % We initialize the algorithm with every agent in its initial position and
 % every derivative to be zero.
 
-for k = 1:K
+% First construct all the matrices that map the solution vector to samples
+% of the n-th derivative of position
+Ts = 0.01;  % Sampling period of final trajectory
+[A_sample, B_sample] = getABmodel(Ts);
+K_sample = length(0:Ts:h);
+[Lambda_sample, Lambda_vel_sample] = getLambda(A_sample,B_sample,K_sample);
+[A0_sample, A0_vel_sample] = getA0(A_sample,K_sample);
+for r = 0:deg_poly
+    if r > 0
+        Mu = T_ctrl_pts{r};
+        Mu_3d = augment_array_ndim(Mu,3);
+        Sigma_r = kron(eye(l),Mu_3d);
+    else
+        Sigma_r = eye(3*(d+1)*l);
+    end
+    
+    delta_r = Bern2power(d-r);     
+    delta_r_3d = augment_array_ndim(delta_r,3);
+    Beta_r = kron(eye(l),delta_r_3d);
+    
+    % We want to evaluate the polynomials from 0 to h, our update frequency
+    t_sample_r = 0:h:((k_hor-1)*h);
+    Tau_r = getTauSamples(T_segment,t_sample_r,d-r,l);
+    Der_sample{r+1} = Tau_r*Beta_r*Sigma_r;
+end
+
+for i = 1:N
+   poi = po(:,:,i)';
+   voi = zeros(3,1);
+   X0(:,i) = [poi ; voi];
+   pos_k_i(:,1,i) = poi;
+   X0_ref(:,:,i) = [poi, voi, zeros(3,1) zeros(3,1) zeros(3,1)];
+   for r = 1:deg_poly+1
+      ref(:,1,r,i) = X0_ref(:,r,i); 
+   end
+end
+
+for k = 2:K
     for i = 1:N
-        if k == 1
-            poi = po(:,:,i)';
-            voi = zeros(3,1);
-            X0 = [poi; voi];
-            X0_ref = [poi voi 0*ones(3,1) zeros(3,1) zeros(3,1)];
-            x = MPC_update(l,deg_poly, A_in, b_in, A_eq, H, mat_f_x0, f_pf(:,:,i), X0, X0_ref);
-            pos = Phi*x + A0*X0;
-            t_sample_bla = 0:0.01:((k_hor-1)*h);
-            Tau_bla = getTauSamples(T_segment,t_sample_bla,d,l);
-            pos_ref = Tau_bla*Beta*x;
-            p_ref = vec2mat(pos_ref,3)';
-            p = vec2mat(pos,3)';
-            
-            figure(1)
-            plot(0:(1*h):((k_hor-1)*h),p(1,:))
-            hold on
-            plot(t_sample_bla,p_ref(1,:))
-            
-        end      
+        % Solve QP
+        x = MPC_update(l,deg_poly, A_in, b_in, A_eq, H, mat_f_x0,...
+            f_pf(:,:,i), X0(:,i), X0_ref(:,:,i));
+        
+        % Get next states and update initial condition values
+        % Propagate states forward up to desired frequency
+%         rand_min = -0.05;
+%         rand_max = .05;
+%         random_noise = rand_min + (rand_max - rand_min).*rand(3,1);
+        random_noise = zeros(3,1);
+        pos_i = vec2mat(Phi*x + A0*X0(:,i),3)';
+        vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
+        
+        %pos_i_sample = vec2mat(Lambda_sample*Der_sample{1}*x + A0_sample*X0(:,i),3)';
+        X0(:,i) = [pos_i(:,2) + random_noise ; vel_i(:,2)];
+        pos_k_i(:,k,i) = pos_i(:,2) + random_noise;
+        
+        for r = 1:deg_poly+1
+           rth_ref(:,:,r) = vec2mat(Der_sample{r}*x,3)';
+           X0_ref(:,r,i) = rth_ref(:,2,r);
+           ref(:,k,r,i) = rth_ref(:,2,r);
+        end
+        
+%         pos = Phi*x + A0*X0;
+%         t_sample_bla = 0:0.01:((k_hor-1)*h);
+%         Tau_bla = getTauSamples(T_segment,t_sample_bla,d,l);
+%         pos_ref = Tau_bla*Beta*x;
+%         p_ref = vec2mat(pos_ref,3)';
+%         p = vec2mat(pos,3)';
+% 
+%         figure(1)
+%         plot(0:(1*h):((k_hor-1)*h),p(1,:))
+%         hold on
+%         plot(t_sample_bla,p_ref(1,:))   
+        
+        
     end
 end
+%%
+state_label = {'x', 'y', 'z'};
+der_label = {'p', 'v', 'a', 'j', 's'};
+
+figure(1)
+state = 1;
+grid on
+hold on;
+plot(tk, pos_k_i(state,:,1),'Linewidth',1.5)
+plot(tk, ref(state,:,1,1),'--r','Linewidth',1.5)
+ylabel([state_label{state} ' [m]'])
+xlabel ('t [s]')
+
+
+figure(2)
+state = 2;
+grid on
+hold on;
+plot(tk, pos_k_i(state,:,1),'Linewidth',1.5)
+plot(tk, ref(state,:,1,1),'--r','Linewidth',1.5)
+ylabel([state_label{state} ' [m]'])
+xlabel ('t [s]')
+
+figure(3)
+state = 3;
+grid on
+hold on;
+plot(tk, pos_k_i(state,:,1),'Linewidth',1.5)
+plot(tk, ref(state,:,1,1),'--r','Linewidth',1.5)
+ylabel([state_label{state} ' [m]'])
+xlabel ('t [s]')
+
+figure(4)
+state = 1;
+derivative = 3;
+grid on
+hold on;
+plot(tk, ref(state,:,derivative,1),'Linewidth',1.5)
+ylabel([ der_label{derivative} state_label{state}  ' [m]'])
+xlabel ('t [s]')
+
 

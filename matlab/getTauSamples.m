@@ -17,6 +17,6 @@ for k = 1:length(t_vec)
     end
 end
 
-Tau_final = getGammaSamples(Tau,length(t_vec));
+Tau_final = getGammaSamples(Tau,length(t_vec),dim);
 
 end

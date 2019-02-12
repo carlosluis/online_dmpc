@@ -1,6 +1,7 @@
-function Gamma = getGammaSamples(Tau,num_samples)
+function Gamma = getGammaSamples(Tau,num_samples,dim)
 l = length(Tau);
-Gamma = zeros(3*num_samples,3*3*l); %ncols = 3D * 3 ctrl pts * l
+N = dim + 1;
+Gamma = zeros(3*num_samples,3*N*l); %ncols = 3D * N ctrl pts * l
 Tau_3d{l} = [];
 curr_row = 1;
 for i = 1:l

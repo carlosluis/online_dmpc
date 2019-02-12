@@ -10,7 +10,8 @@ tk = 0:h:T;
 K = T/h + 1; % number of time steps
 Ts = 0.01; % period for interpolation @ 100Hz
 t = 0:Ts:T; % interpolated time vector
-k_hor = 13; % horizon length
+k_hor = 16; % horizon length
+T_segment = 1.0; % fixed time length of each Bezier segment
 
 % Variables for ellipsoid constraint
 order = 2; % choose between 2 or 4 for the order of the super ellipsoid
@@ -20,8 +21,10 @@ E = diag([1,1,c]);
 E1 = E^(-1);
 E2 = E^(-order);
 
-% Degree of differentiability required
-deg_poly = 4;
+% Bezier curve parameters. Note that d > deg_poly always
+deg_poly = 2; % degree of differentiability required for the position
+l = 3;  % number of Bezier curves to concatenate
+d = 5;  % degree of the bezier curve
 
 N = 1; % number of vehicles
 
@@ -40,14 +43,14 @@ rmin_init = 0.75;
 % [po,pf] = randomTest(N,pmin,pmax,rmin_init);
 
 % Initial positions
-po1 = [1.501,1.5,1.5];
+po1 = [1.0,1.0,1.5];
 po2 = [-1.5,-1.5,1.5];
 po3 = [-1.5,1.5,1.5];
 po4 = [1.5,-1.5,1.5];
 po = cat(3,po1);
 
 % Final positions
-pf1 = [-1.5,-1.5,1.5];
+pf1 = [2.0,1.0,1.5];
 pf2 = [1.5,1.5,1.5];
 pf3 = [1.5,-1.5,1.5];
 pf4 = [-1.5,1.5,1.5];
@@ -70,12 +73,12 @@ A = [1  0 0 h 0 0;
      0 0 1 0 0 h;
      -h*omega_xy^2 0 0 -2*omega_xy*h*zeta_xy 0 0;
      0 -h*omega_xy^2 0 0 -2*omega_xy*h*zeta_xy 0;
-     0 0 -h*omega_z^2 0 0 -2*omega_z*h*zeta_z];
+     0 0 -h*omega_xy^2 0 0 -2*omega_xy*h*zeta_xy];
  
 B = [zeros(3,3);
      h*omega_xy^2 0 0;
      0 h*omega_xy^2 0;
-     0 0 h*omega_z^2]; 
+     0 0 h*omega_xy^2]; 
  
 Lambda = getLambda(A,B,k_hor);
 Lambda_K = Lambda(end-2:end,:); % to be used in the cost function
@@ -85,24 +88,17 @@ A0_K = A0(end-2:end,:);
 
 %% CONSTRUCT MATRICES TO WORK WITH BEZIER CURVES
 % Delta - converts control points into polynomial coefficients
-delta = [1 0 0 0 0;
-         -4 4 0 0 0 ;
-         6 -12 6 0 0;
-         -4 12 -12 4 0;
-         1 -4 6 -4 1 ];
-     
+delta = Bern2power(d);
 delta3d = augment_array_ndim(delta,3);
 
 % Then we assemble a block-diagonal matrix based on the number of segments
 % this matrix is used to compute the minimum snap cost function
-l = 3; 
 Beta = kron(eye(l),delta3d);
 
 % Beta is also used to sample the Bezier curve at different times
 % We will use it to minimize the error at the end of the curve, by sampling
 % our curve at discrete time steps with length 'h'
-T_segment = 0.8; % fixed time length of each Bezier segment
-Tau = getTauPos(h,T_segment,deg_poly);
+Tau = getTauPos(h,T_segment,d);
 Tau3d_all = augment_array_ndim(Tau,3);
 
 % To eliminate overlapping control points between segments
@@ -111,8 +107,9 @@ Tau3d_k = Tau3d_all(1:end-3,:);
 Gamma = blkdiag(kron(eye(l-1),Tau3d_k),Tau3d_all);
 
 % Construct matrix Q: Hessian for each of the polynomial derivatives
-cr = [0 0 0 0 1]; % weights on degree of derivative deg = [0 1 2 3 4]
-Q = getQ(4,T_segment,cr);
+cr = zeros(1,d+1); % weights on degree of derivative deg = [0 1 ... d]
+cr(5) = .01;
+Q = getQ(d,T_segment,cr);
 Q = sum(Q,3);
 
 % This Q is only for one dimension, augment using our helper function
@@ -126,7 +123,7 @@ Alpha = kron(eye(l),Q3d);
 H_snap = Beta'*Alpha*Beta;
 
 % For the trajectory tracking error cost function, define a weight matrix S
-s = 10;
+s = 100;
 spd = 1;
 S = s*[zeros(3*(k_hor-spd),3*k_hor);
        zeros(3*spd,3*(k_hor-spd)) eye(3*spd)];
@@ -151,11 +148,11 @@ mat_f_x0 = A0'*S*Lambda*Gamma*Beta;
 
 % We need to create the matrices that map position control points into c-th
 % derivative control points
-der_mats = getDerivatives(deg_poly);
-n = deg_poly;
-for k = 1:deg_poly
+der_mats = getDerivatives(d);
+n = d; % n represents the n-th derivative of position
+for k = 1:d
     aux = 1;
-    for k_aux = deg_poly:-1:k
+    for k_aux = d:-1:k
        aux = der_mats{k_aux}*aux;   
     end
     T_ctrl_pts{n}(:,:) = aux; 
@@ -173,17 +170,15 @@ Sigma_acc = kron(eye(l),M_3d);
 
 % Multiplying the decision vector X times Sigma_acc gives acc control pts
 % We define a delta_acc that converts acc control points into polynomials
-delta_acc = [1 0 0;
-             -2 2 0;
-             1 -2 1];
+delta_acc = Bern2power(d-2);
          
 delta_acc_3d = augment_array_ndim(delta_acc,3);
 Beta_acc = kron(eye(l),delta_acc_3d);
 
 % Define Tau_acc that evaluates the polynomial at different times
 % Define the times at which we desire to sample between 0s and 2.4s
-t_sample_acc = 0:(4*h):((k_hor-1)*h);
-Tau_acc = getTauSamples(T_segment,t_sample_acc,deg_poly-2,l);
+t_sample_acc = 0:(h):((k_hor-1)*h);
+Tau_acc = getTauSamples(T_segment,t_sample_acc,d-2,l);
 
 % Now we compose the constraint in (A,b) form to pass to the solver
 A_in_acc = [Tau_acc*Beta_acc*Sigma_acc;
@@ -194,8 +189,8 @@ b_in_acc = [amax*ones(3*length(t_sample_acc),1);
            -amin*ones(3*length(t_sample_acc),1)];
 
 % POSITION REFERENCE CONSTRAINT - WORKSPACE BOUNDARIES
-t_sample_pos_ref = 0:(4*h):((k_hor-1)*h);
-Tau_pos_ref = getTauSamples(T_segment,t_sample_pos_ref,deg_poly,l);
+t_sample_pos_ref = 0:(h):((k_hor-1)*h);
+Tau_pos_ref = getTauSamples(T_segment,t_sample_pos_ref,d,l);
 
 % Now we compose the constraint in (A,b) form to pass to the solver
 A_in_pos_ref = [Tau_pos_ref*Beta;
@@ -214,33 +209,35 @@ b_in = [b_in_acc; b_in_pos_ref];
 % Types of constraints: 1) Continuity constraints up to degree deg_poly
 % From the control points of each derivative of the Bezier curve, we must
 % select the first point and the overlapping points between segments
-D = zeros(l, 3*(deg_poly+1));
+D = zeros(l, 3*(d+1));
 for k = 1:l
     if k==1
        D(1,1) = 1; 
     else
-       D(k,(k-1)*(deg_poly+1)) = 1;
-       D(k,(k-1)*(deg_poly+1) + 1) = -1;
+       D(k,(k-1)*(d+1)) = 1;
+       D(k,(k-1)*(d+1) + 1) = -1;
     end
 end
 
 A_eq = augment_array_ndim(D,3);
 
 % Make T_ctrl_pts to be a 3D matrix and representing l Bezier segments 
-T_ctrl_pts_3d{deg_poly} = [];
-D_der{deg_poly} = [];
-for k = 1:deg_poly
-    % Select the ctrl points we need and sustract them
-    for n = 1:l
-        if n == 1
-            D_der{k}(1,:) = [T_ctrl_pts{k}(1,:) zeros(1,(l-1)*(deg_poly+1))];
-        else
-            cols = (n-2)*(deg_poly+1)+1: (n)*(deg_poly+1);
-            D_der{k}(n,cols) = [T_ctrl_pts{k}(end,:) -T_ctrl_pts{k}(1,:)];
+if deg_poly > 0
+    T_ctrl_pts_3d{deg_poly} = [];
+    D_der{deg_poly} = [];
+    for k = 1:deg_poly
+        % Select the ctrl points we need and sustract them
+        for n = 1:l
+            if n == 1
+                D_der{k}(1,:) = [T_ctrl_pts{k}(1,:) zeros(1,(l-1)*(d+1))];
+            else
+                cols = (n-2)*(d+1)+1: (n)*(d+1);
+                D_der{k}(n,cols) = [T_ctrl_pts{k}(end,:) -T_ctrl_pts{k}(1,:)];
+            end
         end
+        % Construct equality constraint matrix by stacking matrices together
+        A_eq = [A_eq;augment_array_ndim(D_der{k},3)];
     end
-    % Construct equality constraint matrix by stacking matrices together
-    A_eq = [A_eq;augment_array_ndim(D_der{k},3)];
 end
 % The constant vector b_eq will be updated within the solver function,
 % since it requires knowledge of the initial condition of the reference
@@ -252,6 +249,23 @@ end
 for k = 1:K
     for i = 1:N
         if k == 1
+            poi = po(:,:,i)';
+            voi = zeros(3,1);
+            X0 = [poi; voi];
+            X0_ref = [poi voi 0*ones(3,1) zeros(3,1) zeros(3,1)];
+            x = MPC_update(l,deg_poly, A_in, b_in, A_eq, H, mat_f_x0, f_pf(:,:,i), X0, X0_ref);
+            pos = Phi*x + A0*X0;
+            t_sample_bla = 0:0.01:((k_hor-1)*h);
+            Tau_bla = getTauSamples(T_segment,t_sample_bla,d,l);
+            pos_ref = Tau_bla*Beta*x;
+            p_ref = vec2mat(pos_ref,3)';
+            p = vec2mat(pos,3)';
+            
+            figure(1)
+            plot(0:(1*h):((k_hor-1)*h),p(1,:))
+            hold on
+            plot(t_sample_bla,p_ref(1,:))
+            
         end      
     end
 end

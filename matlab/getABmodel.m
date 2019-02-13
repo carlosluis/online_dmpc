@@ -15,9 +15,9 @@ A = [1  0 0 h 0 0;
      0 0 1 0 0 h;
      -h*omega_xy^2 0 0 -2*omega_xy*h*zeta_xy 0 0;
      0 -h*omega_xy^2 0 0 -2*omega_xy*h*zeta_xy 0;
-     0 0 -h*omega_z^2 0 0 -2*omega_z*h*zeta_z];
+     0 0 -h*omega_xy^2 0 0 -2*omega_xy*h*zeta_xy];
  
 B = [zeros(3,3);
      h*omega_xy^2 0 0;
      0 h*omega_xy^2 0;
-     0 0 h*omega_z^2]; 
+     0 0 h*omega_xy^2]; 

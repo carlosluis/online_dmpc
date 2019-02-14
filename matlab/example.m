@@ -10,8 +10,8 @@ tk = 0:h:T;
 K = T/h + 1; % number of time steps
 Ts = 0.01; % period for interpolation @ 100Hz
 t = 0:Ts:T; % interpolated time vector
-k_hor = 13; % horizon length
-T_segment = 0.8; % fixed time length of each Bezier segment
+k_hor = 16; % horizon length
+T_segment = 1.0; % fixed time length of each Bezier segment
 
 % Variables for ellipsoid constraint
 order = 2; % choose between 2 or 4 for the order of the super ellipsoid
@@ -22,9 +22,9 @@ E1 = E^(-1);
 E2 = E^(-order);
 
 % Bezier curve parameters. Note that d > deg_poly always
-deg_poly = 1; % degree of differentiability required for the position
+deg_poly = 2; % degree of differentiability required for the position
 l = 3;  % number of Bezier curves to concatenate
-d = 4;  % degree of the bezier curve
+d = 5;  % degree of the bezier curve
 
 N = 1; % number of vehicles
 
@@ -33,8 +33,8 @@ pmin = [-5,-5,0.2];
 pmax = [5,5,2.2];
 
 % Acceleration limits
-amax = 1;
-amin = -1;
+amax = 2;
+amin = -2;
 
 % Minimum distance between vehicles in m
 rmin_init = 0.75;
@@ -87,7 +87,7 @@ Gamma = blkdiag(kron(eye(l-1),Tau3d_k),Tau3d_all);
 
 % Construct matrix Q: Hessian for each of the polynomial derivatives
 cr = zeros(1,d+1); % weights on degree of derivative deg = [0 1 ... d]
-cr(5) = 0;
+cr(3) = .00;
 Q = getQ(d,T_segment,cr);
 Q = sum(Q,3);
 
@@ -102,8 +102,8 @@ Alpha = kron(eye(l),Q3d);
 H_snap = Beta'*Alpha*Beta;
 
 % For the goal tracking error cost function, define a weight matrix S
-s = 100;
-spd = 5;
+s = 10;
+spd = 10;
 S = s*[zeros(3*(k_hor-spd),3*k_hor);
        zeros(3*spd,3*(k_hor-spd)) eye(3*spd)];
 Phi = Lambda*Gamma*Beta;
@@ -243,7 +243,7 @@ Ts = 0.01;  % Sampling period of final trajectory
 K_sample = length(0:Ts:h);
 [Lambda_sample, Lambda_vel_sample] = getLambda(A_sample,B_sample,K_sample);
 [A0_sample, A0_vel_sample] = getA0(A_sample,K_sample);
-for r = 0:deg_poly
+for r = 0:d
     if r > 0
         Mu = T_ctrl_pts{r};
         Mu_3d = augment_array_ndim(Mu,3);
@@ -308,7 +308,7 @@ for k = 2:K
         X0(:,i) = [pos_i(:,1); vel_i(:,1)];
         pos_k_i(:,k,i) = pos_i(:,1);
         
-        for r = 1:deg_poly+1
+        for r = 1:d+1
            rth_ref(:,:,r) = vec2mat(Der_sample{r}*x,3)';
            X0_ref(:,r,i) = rth_ref(:,2,r);
            ref(:,k,r,i) = rth_ref(:,2,r);
@@ -345,22 +345,32 @@ ylabel([state_label{state} ' [m]'])
 xlabel ('t [s]')
 
 
-figure(2)
-state = 2;
-grid on
-hold on;
-plot(tk, pos_k_i(state,:,1),'Linewidth',1.5)
-plot(tk, ref(state,:,1,1),'--r','Linewidth',1.5)
-ylabel([state_label{state} ' [m]'])
-xlabel ('t [s]')
+% figure(2)
+% state = 2;
+% grid on
+% hold on;
+% plot(tk, pos_k_i(state,:,1),'Linewidth',1.5)
+% plot(tk, ref(state,:,1,1),'--r','Linewidth',1.5)
+% ylabel([state_label{state} ' [m]'])
+% xlabel ('t [s]')
+% 
+% figure(3)
+% state = 3;
+% grid on
+% hold on;
+% plot(tk, pos_k_i(state,:,1),'Linewidth',1.5)
+% plot(tk, ref(state,:,1,1),'--r','Linewidth',1.5)
+% ylabel([state_label{state} ' [m]'])
+% xlabel ('t [s]')
+% 
 
-figure(3)
-state = 3;
+figure(2)
+state = 1;
+derivative = 2;
 grid on
 hold on;
-plot(tk, pos_k_i(state,:,1),'Linewidth',1.5)
-plot(tk, ref(state,:,1,1),'--r','Linewidth',1.5)
-ylabel([state_label{state} ' [m]'])
+plot(tk, ref(state,:,derivative,1),'Linewidth',1.5)
+ylabel([ der_label{derivative} state_label{state}  ' [m]'])
 xlabel ('t [s]')
 
 figure(4)

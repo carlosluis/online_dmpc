@@ -1,7 +1,7 @@
 clc
 clear all
 close all
-% warning('off','all')
+warning('off','all')
 
 % Time settings and variables
 T = 20; % Trajectory final time
@@ -10,8 +10,8 @@ tk = 0:h:T;
 K = T/h + 1; % number of time steps
 Ts = 0.01; % period for interpolation @ 100Hz
 t = 0:Ts:T; % interpolated time vector
-k_hor = 16; % horizon length
-T_segment = 1.0; % fixed time length of each Bezier segment
+k_hor = 13; % horizon length
+T_segment = 0.8; % fixed time length of each Bezier segment
 
 % Variables for ellipsoid constraint
 order = 2; % choose between 2 or 4 for the order of the super ellipsoid
@@ -22,15 +22,15 @@ E1 = E^(-1);
 E2 = E^(-order);
 
 % Bezier curve parameters. Note that d > deg_poly always
-deg_poly = 4; % degree of differentiability required for the position
+deg_poly = 1; % degree of differentiability required for the position
 l = 3;  % number of Bezier curves to concatenate
-d = 5;  % degree of the bezier curve
+d = 4;  % degree of the bezier curve
 
 N = 1; % number of vehicles
 
 % Workspace boundaries
-pmin = [-2.5,-2.5,0.2];
-pmax = [2.5,2.5,2.2];
+pmin = [-5,-5,0.2];
+pmax = [5,5,2.2];
 
 % Acceleration limits
 amax = 1;
@@ -43,14 +43,14 @@ rmin_init = 0.75;
 % [po,pf] = randomTest(N,pmin,pmax,rmin_init);
 
 % Initial positions
-po1 = [1.0,1.0,1.5];
+po1 = [0.0,1.0,1.5];
 po2 = [-1.5,-1.5,1.5];
 po3 = [-1.5,1.5,1.5];
 po4 = [1.5,-1.5,1.5];
 po = cat(3,po1);
 
 % Final positions
-pf1 = [2.0,2.0,0.5];
+pf1 = [1.0,1.0,1.5];
 pf2 = [1.5,1.5,1.5];
 pf3 = [1.5,-1.5,1.5];
 pf4 = [-1.5,1.5,1.5];
@@ -87,7 +87,7 @@ Gamma = blkdiag(kron(eye(l-1),Tau3d_k),Tau3d_all);
 
 % Construct matrix Q: Hessian for each of the polynomial derivatives
 cr = zeros(1,d+1); % weights on degree of derivative deg = [0 1 ... d]
-cr(5) = .1;
+cr(5) = 0;
 Q = getQ(d,T_segment,cr);
 Q = sum(Q,3);
 
@@ -102,8 +102,8 @@ Alpha = kron(eye(l),Q3d);
 H_snap = Beta'*Alpha*Beta;
 
 % For the goal tracking error cost function, define a weight matrix S
-s = 500;
-spd = 13;
+s = 100;
+spd = 5;
 S = s*[zeros(3*(k_hor-spd),3*k_hor);
        zeros(3*spd,3*(k_hor-spd)) eye(3*spd)];
 Phi = Lambda*Gamma*Beta;
@@ -111,15 +111,16 @@ Phi_vel = Lambda_vel*Gamma*Beta;
 H_err = Phi'*S*Phi;
 
 % For the reference tracking error cost function:
+% We want to minimize the error between reference and followed trajectory
 s_ref = 0;
 spd = k_hor;
 S_ref = s_ref*[zeros(3*(k_hor-spd),3*k_hor);
        zeros(3*spd,3*(k_hor-spd)) eye(3*spd)];
-Rho = (eye(3*k_hor) - Lambda)*Phi;
+Rho = Gamma*Beta;
 H_ref = Rho'*S_ref*Rho;
 
 % The complete Hessian is simply the sum of the two
-H = H_snap + H_err;
+H = H_err + H_snap;
 
 % The linear term of the cost function depends both on the goal location of
 % agent i and on its current position and velocity
@@ -131,7 +132,6 @@ end
 % We can also construct the matrix that will then be multiplied by the
 % initial condition -> X0'*A0'*S*Lambda*Gamma*Beta
 mat_f_x0 = A0'*S*Lambda*Gamma*Beta;
-mat_f_ref = A0'*S_ref*Rho;
 mat_f_tot = -mat_f_x0;
 %% CONSTRUCT INEQUALITY CONSTRAINT MATRICES
 % Types of constraints: 1) Acceleration limits 2) workspace boundaries
@@ -167,7 +167,7 @@ Beta_acc = kron(eye(l),delta_acc_3d);
 
 % Define Tau_acc that evaluates the polynomial at different times
 % Define the times at which we desire to sample between 0s and 2.4s
-t_sample_acc = 0:(4*h):((k_hor-1)*h);
+t_sample_acc = 0:(h):((k_hor-1)*h);
 Tau_acc = getTauSamples(T_segment,t_sample_acc,d-2,l);
 
 % Now we compose the constraint in (A,b) form to pass to the solver
@@ -179,7 +179,7 @@ b_in_acc = [amax*ones(3*length(t_sample_acc),1);
            -amin*ones(3*length(t_sample_acc),1)];
 
 % POSITION REFERENCE CONSTRAINT - WORKSPACE BOUNDARIES
-t_sample_pos_ref = 0:(4*h):((k_hor-1)*h);
+t_sample_pos_ref = 0:(h):((k_hor-1)*h);
 Tau_pos_ref = getTauSamples(T_segment,t_sample_pos_ref,d,l);
 
 % Now we compose the constraint in (A,b) form to pass to the solver
@@ -265,7 +265,7 @@ end
 for i = 1:N
    poi = po(:,:,i)';
    voi = zeros(3,1);
-   X0(:,i) = [poi ; voi];
+   X0(:,i) = [poi; voi];
    pos_k_i(:,1,i) = poi;
    X0_ref(:,:,i) = [poi, voi, zeros(3,1) zeros(3,1) zeros(3,1)];
    for r = 1:deg_poly+1
@@ -275,9 +275,13 @@ end
 
 for k = 2:K
     for i = 1:N
+        
+%         f_ref = repmat((X0(1:3,i)),k_hor,1)'*S_ref*Rho;
+%         f_tot = f_pf(:,:,i);
+        
         % Solve QP
         x = MPC_update(l,deg_poly, A_in, b_in, A_eq, H, mat_f_tot,...
-            f_pf(:,:,i), X0(:,i), X0_ref(:,:,i));
+            f_pf, X0(:,i), X0_ref(:,:,i));
         
         % Get next states and update initial condition values
         % Propagate states forward up to desired frequency
@@ -285,22 +289,46 @@ for k = 2:K
         rand_max = .03;
         random_noise = rand_min + (rand_max - rand_min).*rand(3,1);
         
-%         if k > 10 && k < 60 
+%         if k > 1 && k < 80 
 %            random_noise = -0.3*ones(3,1); 
 %         end
 %         random_noise = zeros(3,1);
-        pos_i = vec2mat(Phi*x + A0*X0(:,i),3)';
+%         if k >= 1 && k < 100
+%             pos_i = zeros(3,k_hor);
+%             vel_i = zeros(3,k_hor);
+%         else
+%             pos_i = vec2mat(Phi*x + A0*X0(:,i),3)';
+%             vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
+%         end
+
+        pos_i = vec2mat(Lambda*Gamma*Beta*x + A0*X0(:,i),3)';
         vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
         
         %pos_i_sample = vec2mat(Lambda_sample*Der_sample{1}*x + A0_sample*X0(:,i),3)';
-        X0(:,i) = [pos_i(:,2) + random_noise ; vel_i(:,2)];
-        pos_k_i(:,k,i) = pos_i(:,2) + random_noise;
+        X0(:,i) = [pos_i(:,1); vel_i(:,1)];
+        pos_k_i(:,k,i) = pos_i(:,1);
         
         for r = 1:deg_poly+1
            rth_ref(:,:,r) = vec2mat(Der_sample{r}*x,3)';
            X0_ref(:,r,i) = rth_ref(:,2,r);
            ref(:,k,r,i) = rth_ref(:,2,r);
-        end        
+        end   
+        
+        pos = Lambda*Gamma*Beta*x + A0*X0;
+        t_sample_bla = 0:0.01:((k_hor-1)*h);
+        Tau_bla = getTauSamples(T_segment,t_sample_bla,d,l);
+        pos_ref = Tau_bla*Beta*x;
+        p_ref = vec2mat(pos_ref,3)';
+        p = vec2mat(pos,3)';
+
+%         figure(1)
+%         plot(0:(1*h):((k_hor-1)*h),p(1,:))
+%         hold on
+%         plot(t_sample_bla,p_ref(1,:))
+%         hold off
+%         
+%         figure(2)
+%         plot(rth_ref(1,:,3))  
     end
 end
 %%
@@ -345,21 +373,21 @@ ylabel([ der_label{derivative} state_label{state}  ' [m]'])
 xlabel ('t [s]')
 
 %% Extras
-% 
 % pos = Lambda*Gamma*Beta*x + A0*X0;
 %         t_sample_bla = 0:0.01:((k_hor-1)*h);
 %         Tau_bla = getTauSamples(T_segment,t_sample_bla,d,l);
 %         pos_ref = Tau_bla*Beta*x;
 %         p_ref = vec2mat(pos_ref,3)';
 %         p = vec2mat(pos,3)';
-
+% 
 %         figure(1)
 %         plot(0:(1*h):((k_hor-1)*h),p(1,:))
 %         hold on
-%         plot(t_sample_bla,p_ref(1,:))   
+%         plot(t_sample_bla,p_ref(1,:))
+%         hold off
 %         
 %         figure(2)
-%         plot(rth_ref(1,:,end))
-        
+%         plot(rth_ref(1,:,3))   
+
 
 

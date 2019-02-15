@@ -4,7 +4,7 @@ function Tau_final = getTauSamples(T_segment,t_vec,dim, l)
 T_final = l*T_segment;
 Tau{l} = [];
 for k = 1:length(t_vec)
-    if t_vec(k) == T_final
+    if abs(t_vec(k) - T_final) < 1e-4
        segment = l;
        t = T_segment;
     else

@@ -22,7 +22,7 @@ E1 = E^(-1);
 E2 = E^(-order);
 
 % Bezier curve parameters. Note that d > deg_poly always
-deg_poly = 2; % degree of differentiability required for the position
+deg_poly = 3; % degree of differentiability required for the position
 l = 3;  % number of Bezier curves to concatenate
 d = 5;  % degree of the bezier curve
 
@@ -87,7 +87,7 @@ Gamma = blkdiag(kron(eye(l-1),Tau3d_k),Tau3d_all);
 
 % Construct matrix Q: Hessian for each of the polynomial derivatives
 cr = zeros(1,d+1); % weights on degree of derivative deg = [0 1 ... d]
-cr(3) = .00;
+cr(3) = .01;
 Q = getQ(d,T_segment,cr);
 Q = sum(Q,3);
 
@@ -103,7 +103,7 @@ H_snap = Beta'*Alpha*Beta;
 
 % For the goal tracking error cost function, define a weight matrix S
 s = 10;
-spd = 10;
+spd = 5;
 S = s*[zeros(3*(k_hor-spd),3*k_hor);
        zeros(3*spd,3*(k_hor-spd)) eye(3*spd)];
 Phi = Lambda*Gamma*Beta;
@@ -112,7 +112,7 @@ H_err = Phi'*S*Phi;
 
 % For the reference tracking error cost function:
 % We want to minimize the error between reference and followed trajectory
-s_ref = 0;
+s_ref = 10;
 spd = k_hor;
 S_ref = s_ref*[zeros(3*(k_hor-spd),3*k_hor);
        zeros(3*spd,3*(k_hor-spd)) eye(3*spd)];
@@ -167,7 +167,8 @@ Beta_acc = kron(eye(l),delta_acc_3d);
 
 % Define Tau_acc that evaluates the polynomial at different times
 % Define the times at which we desire to sample between 0s and 2.4s
-t_sample_acc = 0:(h):((k_hor-1)*h);
+% NOTE: Always constrain the first 
+t_sample_acc = h:(3*h):((k_hor-1)*h);
 Tau_acc = getTauSamples(T_segment,t_sample_acc,d-2,l);
 
 % Now we compose the constraint in (A,b) form to pass to the solver
@@ -179,7 +180,7 @@ b_in_acc = [amax*ones(3*length(t_sample_acc),1);
            -amin*ones(3*length(t_sample_acc),1)];
 
 % POSITION REFERENCE CONSTRAINT - WORKSPACE BOUNDARIES
-t_sample_pos_ref = 0:(h):((k_hor-1)*h);
+t_sample_pos_ref = h:(3*h):((k_hor-1)*h);
 Tau_pos_ref = getTauSamples(T_segment,t_sample_pos_ref,d,l);
 
 % Now we compose the constraint in (A,b) form to pass to the solver
@@ -275,13 +276,18 @@ end
 
 for k = 2:K
     for i = 1:N
+%         err = abs(X0(1,i) - X0_ref(1,1,i));
+%         
+%         if err > 0.1
+%             X0_ref(1,1,i) = X0(1,i);    
+%         end
         
 %         f_ref = repmat((X0(1:3,i)),k_hor,1)'*S_ref*Rho;
-%         f_tot = f_pf(:,:,i);
+        f_tot = f_pf;
         
         % Solve QP
         x = MPC_update(l,deg_poly, A_in, b_in, A_eq, H, mat_f_tot,...
-            f_pf, X0(:,i), X0_ref(:,:,i));
+            f_tot, X0(:,i), X0_ref(:,:,i));
         
         % Get next states and update initial condition values
         % Propagate states forward up to desired frequency
@@ -293,7 +299,7 @@ for k = 2:K
 %            random_noise = -0.3*ones(3,1); 
 %         end
 %         random_noise = zeros(3,1);
-%         if k >= 1 && k < 100
+%         if k >= 1 && k < 50
 %             pos_i = zeros(3,k_hor);
 %             vel_i = zeros(3,k_hor);
 %         else
@@ -381,6 +387,15 @@ hold on;
 plot(tk, ref(state,:,derivative,1),'Linewidth',1.5)
 ylabel([ der_label{derivative} state_label{state}  ' [m]'])
 xlabel ('t [s]')
+
+% figure(5)
+% state = 1;
+% derivative = 4;
+% grid on
+% hold on;
+% plot(tk, ref(state,:,derivative,1),'Linewidth',1.5)
+% ylabel([ der_label{derivative} state_label{state}  ' [m]'])
+% xlabel ('t [s]')
 
 %% Extras
 % pos = Lambda*Gamma*Beta*x + A0*X0;

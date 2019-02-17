@@ -50,7 +50,7 @@ po4 = [1.5,-1.5,1.5];
 po = cat(3,po1);
 
 % Final positions
-pf1 = [1.0,1.0,1.5];
+pf1 = [2.0,1.0,1.5];
 pf2 = [1.5,1.5,1.5];
 pf3 = [1.5,-1.5,1.5];
 pf4 = [-1.5,1.5,1.5];
@@ -273,14 +273,23 @@ for i = 1:N
       ref(:,1,r,i) = X0_ref(:,r,i); 
    end
 end
+zeta_xy = 0.6502;
+tau_xy = 0.3815;
+omega_xy = 1/tau_xy;
+zeta_z = 0.9103;
+tau_z = 0.3;
+omega_z = 1/tau_z;
+prev_posx = X0(1,1);
+prev_inputx = X0_ref(1,1,1);
+prev_v = X0(4,1);
+
 
 for k = 2:K
     for i = 1:N
-%         err = abs(X0(1,i) - X0_ref(1,1,i));
-%         
-%         if err > 0.1
-%             X0_ref(1,1,i) = X0(1,i);    
-%         end
+        p_ref_prime = prev_posx + X0(4,i)/(h*omega_xy^2) - (1-2*omega_xy*h*zeta_xy)*prev_v/(h*omega_xy^2);
+        err = p_ref_prime - prev_inputx;
+        X0_ref(1,1,i) = X0_ref(1,1,i) + err;
+%         X0_ref(1,1,i) = X0(1,:);
         
 %         f_ref = repmat((X0(1:3,i)),k_hor,1)'*S_ref*Rho;
         f_tot = f_pf;
@@ -299,16 +308,18 @@ for k = 2:K
 %            random_noise = -0.3*ones(3,1); 
 %         end
 %         random_noise = zeros(3,1);
-%         if k >= 1 && k < 50
-%             pos_i = zeros(3,k_hor);
-%             vel_i = zeros(3,k_hor);
-%         else
-%             pos_i = vec2mat(Phi*x + A0*X0(:,i),3)';
-%             vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
-%         end
-
-        pos_i = vec2mat(Lambda*Gamma*Beta*x + A0*X0(:,i),3)';
-        vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
+        if k >= 20 && k < 30
+            pos_i = 0.5*ones(3,k_hor);
+            vel_i = zeros(3,k_hor);
+        else
+            pos_i = vec2mat(Phi*x + A0*X0(:,i),3)' + random_noise;
+            vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
+        end
+        prev_posx = X0(1,i);
+        prev_v = X0(4,i);
+        
+%         pos_i = vec2mat(Lambda*Gamma*Beta*x + A0*X0(:,i),3)';
+%         vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
         
         %pos_i_sample = vec2mat(Lambda_sample*Der_sample{1}*x + A0_sample*X0(:,i),3)';
         X0(:,i) = [pos_i(:,1); vel_i(:,1)];
@@ -319,7 +330,7 @@ for k = 2:K
            X0_ref(:,r,i) = rth_ref(:,2,r);
            ref(:,k,r,i) = rth_ref(:,2,r);
         end   
-        
+        prev_inputx = rth_ref(1,1,1);
         pos = Lambda*Gamma*Beta*x + A0*X0;
         t_sample_bla = 0:0.01:((k_hor-1)*h);
         Tau_bla = getTauSamples(T_segment,t_sample_bla,d,l);

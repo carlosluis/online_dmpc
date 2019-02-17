@@ -1,4 +1,4 @@
-function [A,B] = getABmodel(h)
+function [A,B,A_inv,B_inv] = getABmodel(h)
 
 % Define model parameters for the quad + controller system
 zeta_xy = 0.6502;
@@ -15,9 +15,15 @@ A = [1  0 0 h 0 0;
      0 0 1 0 0 h;
      -h*omega_xy^2 0 0 1-2*omega_xy*h*zeta_xy 0 0;
      0 -h*omega_xy^2 0 0 1-2*omega_xy*h*zeta_xy 0;
-     0 0 -h*omega_xy^2 0 0 1-2*omega_xy*h*zeta_xy];
+     0 0 -h*omega_z^2 0 0 1-2*omega_z*h*zeta_z];
  
 B = [zeros(3,3);
      h*omega_xy^2 0 0;
      0 h*omega_xy^2 0;
-     0 0 h*omega_xy^2]; 
+     0 0 h*omega_z^2]; 
+ 
+ A_inv = [1 0 0 -(1-2*omega_xy*h*zeta_xy)/(h*omega_xy^2) 0 0;
+          0 1 0 0 -(1-2*omega_xy*h*zeta_xy)/(h*omega_xy^2) 0;
+          0 0 1 0 0 -(1-2*omega_z*h*zeta_z)/(h*omega_z^2)];
+  
+ B_inv = diag([1/(h*omega_xy^2),1/(h*omega_xy^2),1/(h*omega_z^2)]);

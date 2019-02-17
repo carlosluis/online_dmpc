@@ -30,7 +30,7 @@ N = 1; % number of vehicles
 
 % Workspace boundaries
 pmin = [-5,-5,0.2];
-pmax = [5,5,2.2];
+pmax = [5,5,4.2];
 
 % Acceleration limits
 amax = 2;
@@ -50,14 +50,14 @@ po4 = [1.5,-1.5,1.5];
 po = cat(3,po1);
 
 % Final positions
-pf1 = [2.0,1.0,1.5];
+pf1 = [4.0,2.0,2.5];
 pf2 = [1.5,1.5,1.5];
 pf3 = [1.5,-1.5,1.5];
 pf4 = [-1.5,1.5,1.5];
 pf  = cat(3,pf1);
 
 %% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES
-[A,B] = getABmodel(h);
+[A,B,A_inv,B_inv] = getABmodel(h);
  
 [Lambda, Lambda_vel] = getLambda(A,B,k_hor);
 Lambda_K = Lambda(end-2:end,:); % to be used in the cost function
@@ -103,7 +103,7 @@ H_snap = Beta'*Alpha*Beta;
 
 % For the goal tracking error cost function, define a weight matrix S
 s = 10;
-spd = 5;
+spd = 3;
 S = s*[zeros(3*(k_hor-spd),3*k_hor);
        zeros(3*spd,3*(k_hor-spd)) eye(3*spd)];
 Phi = Lambda*Gamma*Beta;
@@ -269,28 +269,18 @@ for i = 1:N
    X0(:,i) = [poi; voi];
    pos_k_i(:,1,i) = poi;
    X0_ref(:,:,i) = [poi, voi, zeros(3,1) zeros(3,1) zeros(3,1)];
+   prev_state(:,i) = X0(:,i);
+   prev_input(:,i) = X0_ref(:,1,i);
    for r = 1:deg_poly+1
       ref(:,1,r,i) = X0_ref(:,r,i); 
    end
 end
-zeta_xy = 0.6502;
-tau_xy = 0.3815;
-omega_xy = 1/tau_xy;
-zeta_z = 0.9103;
-tau_z = 0.3;
-omega_z = 1/tau_z;
-prev_posx = X0(1,1);
-prev_inputx = X0_ref(1,1,1);
-prev_v = X0(4,1);
-
 
 for k = 2:K
     for i = 1:N
-        p_ref_prime = prev_posx + X0(4,i)/(h*omega_xy^2) - (1-2*omega_xy*h*zeta_xy)*prev_v/(h*omega_xy^2);
-        err = p_ref_prime - prev_inputx;
-        X0_ref(1,1,i) = X0_ref(1,1,i) + err;
-%         X0_ref(1,1,i) = X0(1,:);
-        
+        p_ref_prime = A_inv*prev_state(:,i) + B_inv*X0(4:6,i);
+        err = p_ref_prime - prev_input(:,i);
+        X0_ref(:,1,i) = X0_ref(:,1,i) + err;        
 %         f_ref = repmat((X0(1:3,i)),k_hor,1)'*S_ref*Rho;
         f_tot = f_pf;
         
@@ -300,43 +290,50 @@ for k = 2:K
         
         % Get next states and update initial condition values
         % Propagate states forward up to desired frequency
-        rand_min = -0.03;
-        rand_max = .03;
-        random_noise = rand_min + (rand_max - rand_min).*rand(3,1);
         
 %         if k > 1 && k < 80 
 %            random_noise = -0.3*ones(3,1); 
 %         end
 %         random_noise = zeros(3,1);
-        if k >= 20 && k < 30
-            pos_i = 0.5*ones(3,k_hor);
-            vel_i = zeros(3,k_hor);
-        else
-            pos_i = vec2mat(Phi*x + A0*X0(:,i),3)' + random_noise;
-            vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
-        end
-        prev_posx = X0(1,i);
-        prev_v = X0(4,i);
+%         if k >= 20 && k < 30
+%             pos_i = 0.5*ones(3,k_hor);
+%             vel_i = zeros(3,k_hor);
+%         else
+%             pos_i = vec2mat(Phi*x + A0*X0(:,i),3)' + random_noise_pos;
+%             vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)' + random_noise_vel;
+%         end
+        prev_state = X0(:,i);
         
-%         pos_i = vec2mat(Lambda*Gamma*Beta*x + A0*X0(:,i),3)';
-%         vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
+        % Add noise to simulations
+        rand_min_pos = -0.001;
+        rand_max_pos = 0.001;
+        random_noise_pos = rand_min_pos + (rand_max_pos - rand_min_pos).*rand(3,1);
+
+        rand_min_vel = -0.03;
+        rand_max_vel = .03;
+        random_noise_vel = rand_min_vel + (rand_max_vel - rand_min_vel).*rand(3,1);
         
-        %pos_i_sample = vec2mat(Lambda_sample*Der_sample{1}*x + A0_sample*X0(:,i),3)';
+        % Apply input to the model
+        pos_i = vec2mat(Phi*x + A0*X0(:,i),3)' + random_noise_pos;
+        vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)' + random_noise_vel;
         X0(:,i) = [pos_i(:,1); vel_i(:,1)];
         pos_k_i(:,k,i) = pos_i(:,1);
+        vel_k_i(:,k,i) = vel_i(:,1);
         
         for r = 1:d+1
            rth_ref(:,:,r) = vec2mat(Der_sample{r}*x,3)';
            X0_ref(:,r,i) = rth_ref(:,2,r);
            ref(:,k,r,i) = rth_ref(:,2,r);
         end   
-        prev_inputx = rth_ref(1,1,1);
-        pos = Lambda*Gamma*Beta*x + A0*X0;
-        t_sample_bla = 0:0.01:((k_hor-1)*h);
-        Tau_bla = getTauSamples(T_segment,t_sample_bla,d,l);
-        pos_ref = Tau_bla*Beta*x;
-        p_ref = vec2mat(pos_ref,3)';
-        p = vec2mat(pos,3)';
+        prev_input(:,i) = rth_ref(:,1,1);
+        
+        % DEBUG PLOTTING
+%         pos = Lambda*Gamma*Beta*x + A0*X0;
+%         t_sample_bla = 0:0.01:((k_hor-1)*h);
+%         Tau_bla = getTauSamples(T_segment,t_sample_bla,d,l);
+%         pos_ref = Tau_bla*Beta*x;
+%         p_ref = vec2mat(pos_ref,3)';
+%         p = vec2mat(pos,3)';
 
 %         figure(1)
 %         plot(0:(1*h):((k_hor-1)*h),p(1,:))
@@ -354,13 +351,22 @@ der_label = {'p', 'v', 'a', 'j', 's'};
 
 figure(1)
 state = 1;
-grid on
+grid on;
 hold on;
 plot(tk, pos_k_i(state,:,1),'Linewidth',1.5)
 plot(tk, ref(state,:,1,1),'--r','Linewidth',1.5)
 ylabel([state_label{state} ' [m]'])
 xlabel ('t [s]')
 
+figure(2)
+state = 1;
+derivative = 2;
+grid on;
+hold on;
+plot(tk, vel_k_i(state,:,1),'Linewidth',1.5)
+plot(tk, ref(state,:,derivative,1),'--r','Linewidth',1.5)
+ylabel([ der_label{derivative} state_label{state}  ' [m]'])
+xlabel ('t [s]')
 
 % figure(2)
 % state = 2;
@@ -381,16 +387,7 @@ xlabel ('t [s]')
 % xlabel ('t [s]')
 % 
 
-figure(2)
-state = 1;
-derivative = 2;
-grid on
-hold on;
-plot(tk, ref(state,:,derivative,1),'Linewidth',1.5)
-ylabel([ der_label{derivative} state_label{state}  ' [m]'])
-xlabel ('t [s]')
-
-figure(4)
+figure(3)
 state = 1;
 derivative = 3;
 grid on

@@ -2,6 +2,7 @@ clc
 clear all
 close all
 warning('off','all')
+visualize = 0;
 
 % Time settings and variables
 T = 20; % Trajectory final time
@@ -26,7 +27,7 @@ deg_poly = 3; % degree of differentiability required for the position
 l = 3;  % number of Bezier curves to concatenate
 d = 5;  % degree of the bezier curve
 
-N = 2; % number of vehicles
+N = 1; % number of vehicles
 
 % Workspace boundaries
 pmin = [-5,-5,0.2];
@@ -50,7 +51,7 @@ po4 = [1.5,-1.5,1.5];
 po = cat(3,po1,po2);
 
 % Final positions
-pf1 = [4.0,2.0,2.5];
+pf1 = [1.0,2.0,2.5];
 pf2 = [1.5,1.5,1.5];
 pf3 = [1.5,-1.5,1.5];
 pf4 = [-1.5,1.5,1.5];
@@ -87,7 +88,7 @@ Gamma = blkdiag(kron(eye(l-1),Tau3d_k),Tau3d_all);
 
 % Construct matrix Q: Hessian for each of the polynomial derivatives
 cr = zeros(1,d+1); % weights on degree of derivative deg = [0 1 ... d]
-cr(5) = .01;
+cr(3) = .01;
 Q = getQ(d,T_segment,cr);
 Q = sum(Q,3);
 
@@ -102,8 +103,8 @@ Alpha = kron(eye(l),Q3d);
 H_snap = Beta'*Alpha*Beta;
 
 % For the goal tracking error cost function, define a weight matrix S
-s = 100;
-spd = 5;
+s = 10;
+spd = 4;
 S = s*[zeros(3*(k_hor-spd),3*k_hor);
        zeros(3*spd,3*(k_hor-spd)) eye(3*spd)];
 Phi = Lambda*Gamma*Beta;
@@ -240,7 +241,7 @@ end
 % First construct all the matrices that map the solution vector to samples
 % of the n-th derivative of position
 Ts = 0.01;  % Sampling period of final trajectory
-[A_sample, B_sample,~,~] = getABmodel(Ts);
+[A_sample, B_sample,A_inv_sample,B_inv_sample] = getABmodel(Ts);
 K_sample = length(0:Ts:h-Ts);
 [Lambda_sample, Lambda_vel_sample] = getLambda(A_sample,B_sample,K_sample);
 [A0_sample, A0_vel_sample] = getA0(A_sample,K_sample);
@@ -257,11 +258,18 @@ for r = 0:d
     delta_r_3d = augment_array_ndim(delta_r,3);
     Beta_r = kron(eye(l),delta_r_3d);
     
-    % We want to evaluate the polynomials from 0 to h, our update frequency
+    % Sample Bezier curves at 1/h Hz for the whole horizon
     t_sample_r = 0:h:((k_hor-1)*h);
     Tau_r = getTauSamples(T_segment,t_sample_r,d-r,l);
-    Der_sample{r+1} = Tau_r*Beta_r*Sigma_r;
+    Der_h{r+1} = Tau_r*Beta_r*Sigma_r;
+    
+    % Sample Bezier curves at 1/Ts Hz for the first applied input
+    t_sample_r = Ts:Ts:h;
+    Tau_r = getTauSamples(T_segment,t_sample_r,d-r,l);
+    Der_ts{r+1} = Tau_r*Beta_r*Sigma_r;
 end
+
+% Sample states at 1/Ts Hz for the first applied input
 t_sample_r = 0:Ts:h-Ts;
 Tau_r = getTauSamples(T_segment,t_sample_r,d,l);
 Phi_sample = Lambda_sample*Tau_r*Beta;
@@ -279,6 +287,7 @@ for i = 1:N
    prev_input(:,i) = X0_ref(:,1,i);
    for r = 1:deg_poly+1
       ref(:,1,r,i) = X0_ref(:,r,i); 
+      ref_sample(:,1,r,i) = X0_ref(:,r,i);
    end
    
    hor_ref(:,:,i,1) = repmat(poi,1,k_hor-1);
@@ -287,7 +296,9 @@ end
 
 for k = 2:K
     for i = 1:N
-        p_ref_prime = A_inv*prev_state(:,i) + B_inv*X0(4:6,i);
+        
+        % Correct initial point of the reference based on state feedback
+        p_ref_prime = A_inv_sample*prev_state(:,i) + B_inv_sample*X0(4:6,i);
         err = p_ref_prime - prev_input(:,i);
         X0_ref(:,1,i) = X0_ref(:,1,i) + err;        
         f_tot = f_pf(:,:,i);
@@ -305,108 +316,93 @@ for k = 2:K
         rand_max_vel = .01;
         random_noise_vel = rand_min_vel + (rand_max_vel - rand_min_vel).*rand(3,1);
         
-        % Get next states and update initial condition values
-        % Propagate states forward up to desired frequency
-        
-%         if k > 1 && k < 80 
-%            random_noise = -0.3*ones(3,1); 
-%         end
-%         random_noise = zeros(3,1);
-%         if k >= 10 && k < 20
-%             pos_i = 1.2*ones(3,k_hor);
-%             vel_i = 0.5*ones(3,k_hor);
-%             pos_i_sample = 1.2*ones(3,h/Ts);
-%             vel_i_sample = 0.5*ones(3,h/Ts);
-%         else
-%             pos_i = vec2mat(Phi*x + A0*X0(:,i),3)' ;
-%             vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)' ;
-%             pos_i_sample = vec2mat(Phi_sample*x + A0_sample*X0(:,i),3)';
-%             vel_i_sample = vec2mat(Phi_vel_sample*x + A0_vel_sample*X0(:,i),3)';
-%         end
-        prev_state(:,i) = X0(:,i);
+        % Apply input to model starting form our previous init condition
+        pos_i = vec2mat(Phi*x + A0*X0(:,i),3)';
+        vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
         
         % Sample at a higher frequency
         pos_i_sample = vec2mat(Phi_sample*x + A0_sample*X0(:,i),3)';
         vel_i_sample = vec2mat(Phi_vel_sample*x + A0_vel_sample*X0(:,i),3)';
         
-        % Apply input to the model
-        pos_i = vec2mat(Phi*x + A0*X0(:,i),3)';
-        vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
-        X0(:,i) = [pos_i_sample(:,end); vel_i_sample(:,end)];
-        pos_k_i(:,k,i) = pos_i(:,1);
-        pos_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = pos_i_sample;
-        vel_k_i(:,k,i) = vel_i(:,1);
-        
+        % APPLY SIMULATED DISTURBANCE
+%         if k >=40 && k < 45
+%             X0(:,i) = [1.0*ones(3,1); 0.0*ones(3,1)];
+%             prev_state(:,i) = X0(:,i);
+%             pos_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = repmat(X0(1:3,i),1,h/Ts);
+%         else
+%             X0(:,i) = [pos_i_sample(:,end); vel_i_sample(:,end)];
+%             prev_state(:,i) = [pos_i_sample(:,end-1); vel_i_sample(:,end-1)];
+%             pos_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = pos_i_sample;
+%         end
+
+        % Sample the resulting Bezier curves at 1/h and 1/Ts
         for r = 1:d+1
-           rth_ref(:,:,r) = vec2mat(Der_sample{r}*x,3)';
-           X0_ref(:,r,i) = rth_ref(:,2,r);
+           rth_ref(:,:,r) = vec2mat(Der_h{r}*x,3)';
+           rth_ref_sample(:,:,r) = vec2mat(Der_ts{r}*x,3)';
+           X0_ref(:,r,i) = rth_ref_sample(:,end,r);
            ref(:,k,r,i) = rth_ref(:,2,r);
-        end   
-        prev_input(:,i) = rth_ref(:,1,1);
+           ref_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),r,i) = rth_ref_sample(:,:,r);
+        end
+
+        % Initial conditions for next MPC cycle
+        X0(:,i) = [pos_i_sample(:,end); vel_i_sample(:,end)];
+        prev_state(:,i) = [pos_i_sample(:,end-1); vel_i_sample(:,end-1)];
+        prev_input(:,i) = rth_ref_sample(:,end-1,1);
         
+        % Update agent's states at 1/h and 1/Ts frequencies
+        pos_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = pos_i_sample;
+        vel_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = vel_i_sample;
+        pos_k_i(:,k,i) = X0(1:3,i);
+        vel_k_i(:,k,i) = X0(4:6,i);
+        
+        % Reference and state prediction horizons - visualization purposes
         hor_ref(:,:,i,k) = rth_ref(:,2:end,1);
         hor_rob(:,:,i,k) = pos_i;
-        
-        % DEBUG PLOTTING
-%         pos = Lambda*Gamma*Beta*x + A0*X0;
-%         t_sample_bla = 0:0.01:((k_hor-1)*h);
-%         Tau_bla = getTauSamples(T_segment,t_sample_bla,d,l);
-%         pos_ref = Tau_bla*Beta*x;
-%         p_ref = vec2mat(pos_ref,3)';
-%         p = vec2mat(pos,3)';
-
-%         figure(1)
-%         plot(0:(1*h):((k_hor-1)*h),p(1,:))
-%         hold on
-%         plot(t_sample_bla,p_ref(1,:))
-%         hold off
-%         
-%         figure(2)
-%         plot(rth_ref(1,:,3))  
     end
 end
 %% 3D VISUALIZATION
-figure(1)
-colors = distinguishable_colors(N);
-beta = 0.8;
-colors_ref = [1,0,0]; 
+if visualize
+    figure(1)
+    colors = distinguishable_colors(N);
+    beta = 0.8;
+    colors_ref = [1,0,0]; 
 
-set(gcf, 'Position', get(0, 'Screensize'));
-set(gcf,'currentchar',' ')
-while get(gcf,'currentchar')==' '
-   
-    for i = 1:N
-    h_line(i) = animatedline('LineWidth',2,'Color',colors(i,:),'LineStyle',':');
-%     h_line_ref(i) = animatedline('LineWidth',2,'Color',colors_ref(i,:),'LineStyle','--');
-    end
-    for k = 1:K
+    set(gcf, 'Position', get(0, 'Screensize'));
+    set(gcf,'currentchar',' ')
+    while get(gcf,'currentchar')==' '
+
         for i = 1:N
-            clearpoints(h_line(i));
-%             clearpoints(h_line_ref(i));
-            addpoints(h_line(i),hor_rob(1,:,i,k),hor_rob(2,:,i,k),hor_rob(3,:,i,k));     
-            hold on;
-%             addpoints(h_line_ref(i),hor_ref(1,:,i,k),hor_ref(2,:,i,k),hor_ref(3,:,i,k));
-            grid on;
-            xlim([pmin(1),pmax(1)])
-            ylim([pmin(2),pmax(2)])
-            zlim([0,pmax(3)])
-            plot3(pos_k_i(1,k,i),pos_k_i(2,k,i),pos_k_i(3,k,i),'o',...
-                'LineWidth',2,'Color',colors(i,:));
-%             plot3(ref(1,k,1,i),ref(2,k,1,i),ref(3,k,1,i),'o',...
-%                 'LineWidth',2,'Color',colors_ref(i,:));
-            plot3(po(1,1,i), po(1,2,i), po(1,3,i),'^',...
-                  'LineWidth',2,'Color',colors(i,:));
-            plot3(pf(1,1,i), pf(1,2,i), pf(1,3,i),'x',...
-                  'LineWidth',2,'Color',colors(i,:));    
+        h_line(i) = animatedline('LineWidth',2,'Color',colors(i,:),'LineStyle',':');
+    %     h_line_ref(i) = animatedline('LineWidth',2,'Color',colors_ref(i,:),'LineStyle','--');
         end
-    drawnow
+        for k = 1:K
+            for i = 1:N
+                clearpoints(h_line(i));
+    %             clearpoints(h_line_ref(i));
+                addpoints(h_line(i),hor_rob(1,:,i,k),hor_rob(2,:,i,k),hor_rob(3,:,i,k));     
+                hold on;
+    %             addpoints(h_line_ref(i),hor_ref(1,:,i,k),hor_ref(2,:,i,k),hor_ref(3,:,i,k));
+                grid on;
+                xlim([pmin(1),pmax(1)])
+                ylim([pmin(2),pmax(2)])
+                zlim([0,pmax(3)])
+                plot3(pos_k_i(1,k,i),pos_k_i(2,k,i),pos_k_i(3,k,i),'o',...
+                    'LineWidth',2,'Color',colors(i,:));
+    %             plot3(ref(1,k,1,i),ref(2,k,1,i),ref(3,k,1,i),'o',...
+    %                 'LineWidth',2,'Color',colors_ref(i,:));
+                plot3(po(1,1,i), po(1,2,i), po(1,3,i),'^',...
+                      'LineWidth',2,'Color',colors(i,:));
+                plot3(pf(1,1,i), pf(1,2,i), pf(1,3,i),'x',...
+                      'LineWidth',2,'Color',colors(i,:));    
+            end
+        drawnow
+        pause(.5)
+        end
+        clf
+        pause(0.5)
     end
-    clf
-    pause(0.5)
 end
-
-
-%%
+%% PLOT STATES AND REFERENCE TRAJECTORIES
 state_label = {'x', 'y', 'z'};
 der_label = {'p', 'v', 'a', 'j', 's'};
 
@@ -414,9 +410,8 @@ figure(1)
 state = 1;
 grid on;
 hold on;
-plot(tk, pos_k_i(state,:,1),'Linewidth',1.5)
-plot(tk, ref(state,:,1,1),'--r','Linewidth',1.5)
-plot(t, pos_k_i_sample(state,1:length(t),1),'m','Linewidth',1.5)
+plot(t, pos_k_i_sample(state,:,1),'Linewidth',1.5)
+plot(t, ref_sample(state,:,1,1),'--r','Linewidth',1.5)
 ylabel([state_label{state} ' [m]'])
 xlabel ('t [s]')
 
@@ -425,8 +420,8 @@ state = 1;
 derivative = 2;
 grid on;
 hold on;
-plot(tk, vel_k_i(state,:,1),'Linewidth',1.5)
-plot(tk, ref(state,:,derivative,1),'--r','Linewidth',1.5)
+plot(t, vel_k_i_sample(state,:,1),'Linewidth',1.5)
+plot(t, ref_sample(state,:,derivative,1),'--r','Linewidth',1.5)
 ylabel([ der_label{derivative} state_label{state}  ' [m]'])
 xlabel ('t [s]')
 
@@ -454,7 +449,7 @@ state = 1;
 derivative = 3;
 grid on
 hold on;
-plot(tk, ref(state,:,derivative,1),'Linewidth',1.5)
+plot(t, ref_sample(state,:,derivative,1),'Linewidth',1.5)
 ylabel([ der_label{derivative} state_label{state}  ' [m]'])
 xlabel ('t [s]')
 
@@ -467,14 +462,14 @@ xlabel ('t [s]')
 % ylabel([ der_label{derivative} state_label{state}  ' [m]'])
 % xlabel ('t [s]')
 
-%% Extras
-% pos = Lambda*Gamma*Beta*x + A0*X0;
+%% DEBUG PLOTTING
+%         pos = Lambda*Gamma*Beta*x + A0*X0;
 %         t_sample_bla = 0:0.01:((k_hor-1)*h);
 %         Tau_bla = getTauSamples(T_segment,t_sample_bla,d,l);
 %         pos_ref = Tau_bla*Beta*x;
 %         p_ref = vec2mat(pos_ref,3)';
 %         p = vec2mat(pos,3)';
-% 
+
 %         figure(1)
 %         plot(0:(1*h):((k_hor-1)*h),p(1,:))
 %         hold on
@@ -482,7 +477,4 @@ xlabel ('t [s]')
 %         hold off
 %         
 %         figure(2)
-%         plot(rth_ref(1,:,3))   
-
-
-
+%         plot(rth_ref(1,:,3))  

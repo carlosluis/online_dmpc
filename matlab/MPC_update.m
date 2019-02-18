@@ -1,5 +1,5 @@
 function x = MPC_update(l, deg_poly, Ain, bin, Aeq, H, mat_f_tot, f_tot, X0, X0_ref)
-constr_tol = 1e-3;
+constr_tol = 1e-8;
 options = optimoptions('quadprog','ConstraintTolerance',constr_tol);
 
 % Construct linear term of the function based on X0 
@@ -17,4 +17,3 @@ end
 
 % Solve the QP
 [x,fval,exitflag] = quadprog(2*H,f',Ain,bin,Aeq,beq,[],[],[],options);
-hola = 1;

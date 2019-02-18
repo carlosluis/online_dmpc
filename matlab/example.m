@@ -9,7 +9,7 @@ h = 0.2; % time step duration
 tk = 0:h:T;
 K = T/h + 1; % number of time steps
 Ts = 0.01; % period for interpolation @ 100Hz
-t = 0:Ts:T-Ts; % interpolated time vector
+t = 0:Ts:T; % interpolated time vector
 k_hor = 16; % horizon length
 T_segment = 1.0; % fixed time length of each Bezier segment
 
@@ -26,7 +26,7 @@ deg_poly = 3; % degree of differentiability required for the position
 l = 3;  % number of Bezier curves to concatenate
 d = 5;  % degree of the bezier curve
 
-N = 1; % number of vehicles
+N = 2; % number of vehicles
 
 % Workspace boundaries
 pmin = [-5,-5,0.2];
@@ -47,14 +47,14 @@ po1 = [0.0,1.0,1.5];
 po2 = [-1.5,-1.5,1.5];
 po3 = [-1.5,1.5,1.5];
 po4 = [1.5,-1.5,1.5];
-po = cat(3,po1);
+po = cat(3,po1,po2);
 
 % Final positions
-pf1 = [1.0,2.0,2.5];
+pf1 = [4.0,2.0,2.5];
 pf2 = [1.5,1.5,1.5];
 pf3 = [1.5,-1.5,1.5];
 pf4 = [-1.5,1.5,1.5];
-pf  = cat(3,pf1);
+pf  = cat(3,pf1,pf2);
 
 %% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES
 [A,B,A_inv,B_inv] = getABmodel(h);
@@ -87,7 +87,7 @@ Gamma = blkdiag(kron(eye(l-1),Tau3d_k),Tau3d_all);
 
 % Construct matrix Q: Hessian for each of the polynomial derivatives
 cr = zeros(1,d+1); % weights on degree of derivative deg = [0 1 ... d]
-cr(3) = .01;
+cr(5) = .01;
 Q = getQ(d,T_segment,cr);
 Q = sum(Q,3);
 
@@ -102,8 +102,8 @@ Alpha = kron(eye(l),Q3d);
 H_snap = Beta'*Alpha*Beta;
 
 % For the goal tracking error cost function, define a weight matrix S
-s = 10;
-spd = 3;
+s = 100;
+spd = 5;
 S = s*[zeros(3*(k_hor-spd),3*k_hor);
        zeros(3*spd,3*(k_hor-spd)) eye(3*spd)];
 Phi = Lambda*Gamma*Beta;
@@ -267,18 +267,22 @@ Tau_r = getTauSamples(T_segment,t_sample_r,d,l);
 Phi_sample = Lambda_sample*Tau_r*Beta;
 Phi_vel_sample = Lambda_vel_sample*Tau_r*Beta;
 
+% Init algorithm
 for i = 1:N
    poi = po(:,:,i)';
    voi = zeros(3,1);
    X0(:,i) = [poi; voi];
    pos_k_i(:,1,i) = poi;
-%    pos_k_i_sample(:,1:(h/Ts),i) = repmat(poi,1,h/Ts);
+   pos_k_i_sample(:,1,i) = poi;
    X0_ref(:,:,i) = [poi, voi, zeros(3,1) zeros(3,1) zeros(3,1)];
    prev_state(:,i) = X0(:,i);
    prev_input(:,i) = X0_ref(:,1,i);
    for r = 1:deg_poly+1
       ref(:,1,r,i) = X0_ref(:,r,i); 
    end
+   
+   hor_ref(:,:,i,1) = repmat(poi,1,k_hor-1);
+   hor_rob(:,:,i,1) = repmat(poi,1,k_hor);
 end
 
 for k = 2:K
@@ -286,8 +290,7 @@ for k = 2:K
         p_ref_prime = A_inv*prev_state(:,i) + B_inv*X0(4:6,i);
         err = p_ref_prime - prev_input(:,i);
         X0_ref(:,1,i) = X0_ref(:,1,i) + err;        
-%         f_ref = repmat((X0(1:3,i)),k_hor,1)'*S_ref*Rho;
-        f_tot = f_pf;
+        f_tot = f_pf(:,:,i);
         
         % Solve QP
         x = MPC_update(l,deg_poly, A_in, b_in, A_eq, H, mat_f_tot,...
@@ -309,29 +312,29 @@ for k = 2:K
 %            random_noise = -0.3*ones(3,1); 
 %         end
 %         random_noise = zeros(3,1);
-        if k >= 40 && k < 60
-            pos_i = 0.5*ones(3,k_hor);
-            vel_i = zeros(3,k_hor);
-            pos_i_sample = 0.5*ones(3,h/Ts);
-            vel_i_sample = zeros(3,h/Ts);
-        else
-            pos_i = vec2mat(Phi*x + A0*X0(:,i),3)';
-            vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
-            pos_i_sample = vec2mat(Phi_sample*x + A0_sample*X0(:,i),3)';
-            vel_i_sample = vec2mat(Phi_vel_sample*x + A0_vel_sample*X0(:,i),3)';
-        end
-        prev_state = X0(:,i);
+%         if k >= 10 && k < 20
+%             pos_i = 1.2*ones(3,k_hor);
+%             vel_i = 0.5*ones(3,k_hor);
+%             pos_i_sample = 1.2*ones(3,h/Ts);
+%             vel_i_sample = 0.5*ones(3,h/Ts);
+%         else
+%             pos_i = vec2mat(Phi*x + A0*X0(:,i),3)' ;
+%             vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)' ;
+%             pos_i_sample = vec2mat(Phi_sample*x + A0_sample*X0(:,i),3)';
+%             vel_i_sample = vec2mat(Phi_vel_sample*x + A0_vel_sample*X0(:,i),3)';
+%         end
+        prev_state(:,i) = X0(:,i);
         
         % Sample at a higher frequency
-%         pos_i_sample = vec2mat(Phi_sample*x + A0_sample*X0(:,i),3)';
-%         vel_i_sample = vec2mat(Phi_vel_sample*x + A0_vel_sample*X0(:,i),3)';
+        pos_i_sample = vec2mat(Phi_sample*x + A0_sample*X0(:,i),3)';
+        vel_i_sample = vec2mat(Phi_vel_sample*x + A0_vel_sample*X0(:,i),3)';
         
         % Apply input to the model
-%         pos_i = vec2mat(Phi*x + A0*X0(:,i),3)';
-%         vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
+        pos_i = vec2mat(Phi*x + A0*X0(:,i),3)';
+        vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
         X0(:,i) = [pos_i_sample(:,end); vel_i_sample(:,end)];
         pos_k_i(:,k,i) = pos_i(:,1);
-        pos_k_i_sample(:,1+(k-2)*(h/Ts):(k-1)*(h/Ts),i) = pos_i_sample;
+        pos_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = pos_i_sample;
         vel_k_i(:,k,i) = vel_i(:,1);
         
         for r = 1:d+1
@@ -340,6 +343,9 @@ for k = 2:K
            ref(:,k,r,i) = rth_ref(:,2,r);
         end   
         prev_input(:,i) = rth_ref(:,1,1);
+        
+        hor_ref(:,:,i,k) = rth_ref(:,2:end,1);
+        hor_rob(:,:,i,k) = pos_i;
         
         % DEBUG PLOTTING
 %         pos = Lambda*Gamma*Beta*x + A0*X0;
@@ -359,6 +365,47 @@ for k = 2:K
 %         plot(rth_ref(1,:,3))  
     end
 end
+%% 3D VISUALIZATION
+figure(1)
+colors = distinguishable_colors(N);
+beta = 0.8;
+colors_ref = [1,0,0]; 
+
+set(gcf, 'Position', get(0, 'Screensize'));
+set(gcf,'currentchar',' ')
+while get(gcf,'currentchar')==' '
+   
+    for i = 1:N
+    h_line(i) = animatedline('LineWidth',2,'Color',colors(i,:),'LineStyle',':');
+%     h_line_ref(i) = animatedline('LineWidth',2,'Color',colors_ref(i,:),'LineStyle','--');
+    end
+    for k = 1:K
+        for i = 1:N
+            clearpoints(h_line(i));
+%             clearpoints(h_line_ref(i));
+            addpoints(h_line(i),hor_rob(1,:,i,k),hor_rob(2,:,i,k),hor_rob(3,:,i,k));     
+            hold on;
+%             addpoints(h_line_ref(i),hor_ref(1,:,i,k),hor_ref(2,:,i,k),hor_ref(3,:,i,k));
+            grid on;
+            xlim([pmin(1),pmax(1)])
+            ylim([pmin(2),pmax(2)])
+            zlim([0,pmax(3)])
+            plot3(pos_k_i(1,k,i),pos_k_i(2,k,i),pos_k_i(3,k,i),'o',...
+                'LineWidth',2,'Color',colors(i,:));
+%             plot3(ref(1,k,1,i),ref(2,k,1,i),ref(3,k,1,i),'o',...
+%                 'LineWidth',2,'Color',colors_ref(i,:));
+            plot3(po(1,1,i), po(1,2,i), po(1,3,i),'^',...
+                  'LineWidth',2,'Color',colors(i,:));
+            plot3(pf(1,1,i), pf(1,2,i), pf(1,3,i),'x',...
+                  'LineWidth',2,'Color',colors(i,:));    
+        end
+    drawnow
+    end
+    clf
+    pause(0.5)
+end
+
+
 %%
 state_label = {'x', 'y', 'z'};
 der_label = {'p', 'v', 'a', 'j', 's'};

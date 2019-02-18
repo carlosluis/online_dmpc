@@ -2,7 +2,11 @@ clc
 clear all
 close all
 warning('off','all')
-visualize = 0;
+visualize = 0;  % 3D visualization of trajectory and predictions
+
+% Disturbance applied to the model within a time frame
+disturbance = 1;
+disturbance_k = 40:44;
 
 % Time settings and variables
 T = 20; % Trajectory final time
@@ -293,13 +297,16 @@ for i = 1:N
    hor_ref(:,:,i,1) = repmat(poi,1,k_hor-1);
    hor_rob(:,:,i,1) = repmat(poi,1,k_hor);
 end
-
+% Admissible model error, helps filtering noise while accounting for disturbances
+err_tol = 0.1;  
 for k = 2:K
-    for i = 1:N
-        
+    for i = 1:N 
         % Correct initial point of the reference based on state feedback
         p_ref_prime = A_inv_sample*prev_state(:,i) + B_inv_sample*X0(4:6,i);
         err = p_ref_prime - prev_input(:,i);
+        if abs(err) < err_tol
+            err = 0;
+        end
         X0_ref(:,1,i) = X0_ref(:,1,i) + err;        
         f_tot = f_pf(:,:,i);
         
@@ -321,21 +328,10 @@ for k = 2:K
         vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
         
         % Sample at a higher frequency
-        pos_i_sample = vec2mat(Phi_sample*x + A0_sample*X0(:,i),3)';
-        vel_i_sample = vec2mat(Phi_vel_sample*x + A0_vel_sample*X0(:,i),3)';
-        
-        % APPLY SIMULATED DISTURBANCE
-%         if k >=40 && k < 45
-%             X0(:,i) = [1.0*ones(3,1); 0.0*ones(3,1)];
-%             prev_state(:,i) = X0(:,i);
-%             pos_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = repmat(X0(1:3,i),1,h/Ts);
-%         else
-%             X0(:,i) = [pos_i_sample(:,end); vel_i_sample(:,end)];
-%             prev_state(:,i) = [pos_i_sample(:,end-1); vel_i_sample(:,end-1)];
-%             pos_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = pos_i_sample;
-%         end
+        pos_i_sample = vec2mat(Phi_sample*x + A0_sample*X0(:,i),3)' + random_noise_pos;
+        vel_i_sample = vec2mat(Phi_vel_sample*x + A0_vel_sample*X0(:,i),3)' + random_noise_vel;
 
-        % Sample the resulting Bezier curves at 1/h and 1/Ts
+        % Sample the resulting reference Bezier curves at 1/h and 1/Ts
         for r = 1:d+1
            rth_ref(:,:,r) = vec2mat(Der_h{r}*x,3)';
            rth_ref_sample(:,:,r) = vec2mat(Der_ts{r}*x,3)';
@@ -344,16 +340,25 @@ for k = 2:K
            ref_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),r,i) = rth_ref_sample(:,:,r);
         end
 
-        % Initial conditions for next MPC cycle
-        X0(:,i) = [pos_i_sample(:,end); vel_i_sample(:,end)];
-        prev_state(:,i) = [pos_i_sample(:,end-1); vel_i_sample(:,end-1)];
+        if ~disturbance || ~ismember(k,disturbance_k)
+            % Initial conditions for next MPC cycle
+            X0(:,i) = [pos_i_sample(:,end); vel_i_sample(:,end)];
+            prev_state(:,i) = [pos_i_sample(:,end-1); vel_i_sample(:,end-1)];
+
+            % Update agent's states at 1/h and 1/Ts frequencies
+            pos_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = pos_i_sample;
+            vel_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = vel_i_sample;
+            pos_k_i(:,k,i) = X0(1:3,i);
+            vel_k_i(:,k,i) = X0(4:6,i);
+        elseif disturbance && ismember(k,disturbance_k)
+            % APPLY SIMULATED DISTURBANCE
+            X0(:,i) = [0.5*ones(3,1); 0.0*ones(3,1)];
+            prev_state(:,i) = X0(:,i);
+            pos_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = repmat(X0(1:3,i),1,h/Ts);
+            vel_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = repmat(X0(4:6,i),1,h/Ts);
+        end 
+                    
         prev_input(:,i) = rth_ref_sample(:,end-1,1);
-        
-        % Update agent's states at 1/h and 1/Ts frequencies
-        pos_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = pos_i_sample;
-        vel_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = vel_i_sample;
-        pos_k_i(:,k,i) = X0(1:3,i);
-        vel_k_i(:,k,i) = X0(4:6,i);
         
         % Reference and state prediction horizons - visualization purposes
         hor_ref(:,:,i,k) = rth_ref(:,2:end,1);

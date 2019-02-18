@@ -9,7 +9,7 @@ h = 0.2; % time step duration
 tk = 0:h:T;
 K = T/h + 1; % number of time steps
 Ts = 0.01; % period for interpolation @ 100Hz
-t = 0:Ts:T; % interpolated time vector
+t = 0:Ts:T-Ts; % interpolated time vector
 k_hor = 16; % horizon length
 T_segment = 1.0; % fixed time length of each Bezier segment
 
@@ -50,7 +50,7 @@ po4 = [1.5,-1.5,1.5];
 po = cat(3,po1);
 
 % Final positions
-pf1 = [4.0,2.0,2.5];
+pf1 = [1.0,2.0,2.5];
 pf2 = [1.5,1.5,1.5];
 pf3 = [1.5,-1.5,1.5];
 pf4 = [-1.5,1.5,1.5];
@@ -240,8 +240,8 @@ end
 % First construct all the matrices that map the solution vector to samples
 % of the n-th derivative of position
 Ts = 0.01;  % Sampling period of final trajectory
-[A_sample, B_sample] = getABmodel(Ts);
-K_sample = length(0:Ts:h);
+[A_sample, B_sample,~,~] = getABmodel(Ts);
+K_sample = length(0:Ts:h-Ts);
 [Lambda_sample, Lambda_vel_sample] = getLambda(A_sample,B_sample,K_sample);
 [A0_sample, A0_vel_sample] = getA0(A_sample,K_sample);
 for r = 0:d
@@ -262,12 +262,17 @@ for r = 0:d
     Tau_r = getTauSamples(T_segment,t_sample_r,d-r,l);
     Der_sample{r+1} = Tau_r*Beta_r*Sigma_r;
 end
+t_sample_r = 0:Ts:h-Ts;
+Tau_r = getTauSamples(T_segment,t_sample_r,d,l);
+Phi_sample = Lambda_sample*Tau_r*Beta;
+Phi_vel_sample = Lambda_vel_sample*Tau_r*Beta;
 
 for i = 1:N
    poi = po(:,:,i)';
    voi = zeros(3,1);
    X0(:,i) = [poi; voi];
    pos_k_i(:,1,i) = poi;
+%    pos_k_i_sample(:,1:(h/Ts),i) = repmat(poi,1,h/Ts);
    X0_ref(:,:,i) = [poi, voi, zeros(3,1) zeros(3,1) zeros(3,1)];
    prev_state(:,i) = X0(:,i);
    prev_input(:,i) = X0_ref(:,1,i);
@@ -288,6 +293,15 @@ for k = 2:K
         x = MPC_update(l,deg_poly, A_in, b_in, A_eq, H, mat_f_tot,...
             f_tot, X0(:,i), X0_ref(:,:,i));
         
+        % Add noise to simulations
+        rand_min_pos = -0.001;
+        rand_max_pos = 0.001;
+        random_noise_pos = rand_min_pos + (rand_max_pos - rand_min_pos).*rand(3,1);
+
+        rand_min_vel = -0.01;
+        rand_max_vel = .01;
+        random_noise_vel = rand_min_vel + (rand_max_vel - rand_min_vel).*rand(3,1);
+        
         % Get next states and update initial condition values
         % Propagate states forward up to desired frequency
         
@@ -295,29 +309,29 @@ for k = 2:K
 %            random_noise = -0.3*ones(3,1); 
 %         end
 %         random_noise = zeros(3,1);
-%         if k >= 20 && k < 30
-%             pos_i = 0.5*ones(3,k_hor);
-%             vel_i = zeros(3,k_hor);
-%         else
-%             pos_i = vec2mat(Phi*x + A0*X0(:,i),3)' + random_noise_pos;
-%             vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)' + random_noise_vel;
-%         end
+        if k >= 40 && k < 60
+            pos_i = 0.5*ones(3,k_hor);
+            vel_i = zeros(3,k_hor);
+            pos_i_sample = 0.5*ones(3,h/Ts);
+            vel_i_sample = zeros(3,h/Ts);
+        else
+            pos_i = vec2mat(Phi*x + A0*X0(:,i),3)';
+            vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
+            pos_i_sample = vec2mat(Phi_sample*x + A0_sample*X0(:,i),3)';
+            vel_i_sample = vec2mat(Phi_vel_sample*x + A0_vel_sample*X0(:,i),3)';
+        end
         prev_state = X0(:,i);
         
-        % Add noise to simulations
-        rand_min_pos = -0.001;
-        rand_max_pos = 0.001;
-        random_noise_pos = rand_min_pos + (rand_max_pos - rand_min_pos).*rand(3,1);
-
-        rand_min_vel = -0.03;
-        rand_max_vel = .03;
-        random_noise_vel = rand_min_vel + (rand_max_vel - rand_min_vel).*rand(3,1);
+        % Sample at a higher frequency
+%         pos_i_sample = vec2mat(Phi_sample*x + A0_sample*X0(:,i),3)';
+%         vel_i_sample = vec2mat(Phi_vel_sample*x + A0_vel_sample*X0(:,i),3)';
         
         % Apply input to the model
-        pos_i = vec2mat(Phi*x + A0*X0(:,i),3)' + random_noise_pos;
-        vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)' + random_noise_vel;
-        X0(:,i) = [pos_i(:,1); vel_i(:,1)];
+%         pos_i = vec2mat(Phi*x + A0*X0(:,i),3)';
+%         vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
+        X0(:,i) = [pos_i_sample(:,end); vel_i_sample(:,end)];
         pos_k_i(:,k,i) = pos_i(:,1);
+        pos_k_i_sample(:,1+(k-2)*(h/Ts):(k-1)*(h/Ts),i) = pos_i_sample;
         vel_k_i(:,k,i) = vel_i(:,1);
         
         for r = 1:d+1
@@ -355,6 +369,7 @@ grid on;
 hold on;
 plot(tk, pos_k_i(state,:,1),'Linewidth',1.5)
 plot(tk, ref(state,:,1,1),'--r','Linewidth',1.5)
+plot(t, pos_k_i_sample(state,1:length(t),1),'m','Linewidth',1.5)
 ylabel([state_label{state} ' [m]'])
 xlabel ('t [s]')
 

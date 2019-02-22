@@ -2,10 +2,11 @@ clc
 clear all
 close all
 warning('off','all')
-visualize = 0;  % 3D visualization of trajectory and predictions
+visualize = 1;  % 3D visualization of trajectory and predictions
 
 % Disturbance applied to the model within a time frame
-disturbance = 1;
+disturbance = 0;
+agent_disturb = [1];
 disturbance_k = 40:44;
 
 % Time settings and variables
@@ -21,7 +22,7 @@ T_segment = 1.0; % fixed time length of each Bezier segment
 % Variables for ellipsoid constraint
 order = 2; % choose between 2 or 4 for the order of the super ellipsoid
 rmin = 0.5; % X-Y protection radius for collisions
-c = 1.5; % make this one for spherical constraint
+c = 1.0; % make this one for spherical constraint
 E = diag([1,1,c]);
 E1 = E^(-1);
 E2 = E^(-order);
@@ -31,7 +32,7 @@ deg_poly = 3; % degree of differentiability required for the position
 l = 3;  % number of Bezier curves to concatenate
 d = 5;  % degree of the bezier curve
 
-N = 1; % number of vehicles
+N = 2; % number of vehicles
 
 % Workspace boundaries
 pmin = [-5,-5,0.2];
@@ -48,15 +49,15 @@ rmin_init = 0.75;
 % [po,pf] = randomTest(N,pmin,pmax,rmin_init);
 
 % Initial positions
-po1 = [0.0,1.0,1.5];
-po2 = [-1.5,-1.5,1.5];
+po1 = [1.0,0.0,1.5];
+po2 = [-1.0,0.1,1.5];
 po3 = [-1.5,1.5,1.5];
 po4 = [1.5,-1.5,1.5];
 po = cat(3,po1,po2);
 
 % Final positions
-pf1 = [1.0,2.0,2.5];
-pf2 = [1.5,1.5,1.5];
+pf1 = [-1.0,0.0,1.5];
+pf2 = [1.0,0.1,1.5];
 pf3 = [1.5,-1.5,1.5];
 pf4 = [-1.5,1.5,1.5];
 pf  = cat(3,pf1,pf2);
@@ -293,13 +294,14 @@ for i = 1:N
       ref(:,1,r,i) = X0_ref(:,r,i); 
       ref_sample(:,1,r,i) = X0_ref(:,r,i);
    end
-   
    hor_ref(:,:,i,1) = repmat(poi,1,k_hor-1);
    hor_rob(:,:,i,1) = repmat(poi,1,k_hor);
 end
 % Admissible model error, helps filtering noise while accounting for disturbances
 err_tol = 0.1;  
 for k = 2:K
+    % Update the current position for the collision avoidance basen in BVC
+    current_pos = squeeze(X0_ref(:,1,:));
     for i = 1:N 
         % Correct initial point of the reference based on state feedback
         p_ref_prime = A_inv_sample*prev_state(:,i) + B_inv_sample*X0(4:6,i);
@@ -310,8 +312,15 @@ for k = 2:K
         X0_ref(:,1,i) = X0_ref(:,1,i) + err;        
         f_tot = f_pf(:,:,i);
         
+        % Construct BVC constraints
+        [A_coll, b_coll] = BVC_constraints(current_pos,d,i,rmin,order,E1,E2,(d+1)*3*l);
+        
+        % Augment the inequality constraints
+        A_in_i = [A_in; A_coll];
+        b_in_i = [b_in; b_coll];
+        
         % Solve QP
-        x = MPC_update(l,deg_poly, A_in, b_in, A_eq, H, mat_f_tot,...
+        x = MPC_update(l,deg_poly, A_in_i, b_in_i, A_eq, H, mat_f_tot,...
             f_tot, X0(:,i), X0_ref(:,:,i));
         
         % Add noise to simulations
@@ -328,8 +337,8 @@ for k = 2:K
         vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
         
         % Sample at a higher frequency
-        pos_i_sample = vec2mat(Phi_sample*x + A0_sample*X0(:,i),3)' + random_noise_pos;
-        vel_i_sample = vec2mat(Phi_vel_sample*x + A0_vel_sample*X0(:,i),3)' + random_noise_vel;
+        pos_i_sample = vec2mat(Phi_sample*x + A0_sample*X0(:,i),3)';
+        vel_i_sample = vec2mat(Phi_vel_sample*x + A0_vel_sample*X0(:,i),3)';
 
         % Sample the resulting reference Bezier curves at 1/h and 1/Ts
         for r = 1:d+1
@@ -363,8 +372,31 @@ for k = 2:K
         % Reference and state prediction horizons - visualization purposes
         hor_ref(:,:,i,k) = rth_ref(:,2:end,1);
         hor_rob(:,:,i,k) = pos_i;
+        
+%         figure(1)
+%         plot(pos_i(1,:))
+%         hold on
+%         plot(rth_ref(1,1:end,1))
+%         hold off
+
     end
 end
+%%
+figure(6)
+for i = 1:N
+    for j = 1:N
+        if(i~=j)
+            differ = E1*(ref_sample(:,:,1,i) - ref_sample(:,:,1,j));
+            dist = (sum(differ.^order,1)).^(1/order);
+            plot(t, dist, 'LineWidth',1.5);
+            grid on;
+            hold on;
+            xlabel('t [s]')
+            ylabel('Inter-agent distance [m]');
+        end
+    end
+end
+plot(t,rmin*ones(length(t),1),'--r','LineWidth',1.5);
 %% 3D VISUALIZATION
 if visualize
     figure(1)
@@ -378,15 +410,16 @@ if visualize
 
         for i = 1:N
         h_line(i) = animatedline('LineWidth',2,'Color',colors(i,:),'LineStyle',':');
+        h_line_2(i) = animatedline('LineWidth',2,'Color','k','LineStyle',':');
     %     h_line_ref(i) = animatedline('LineWidth',2,'Color',colors_ref(i,:),'LineStyle','--');
         end
         for k = 1:K
             for i = 1:N
                 clearpoints(h_line(i));
-    %             clearpoints(h_line_ref(i));
-                addpoints(h_line(i),hor_rob(1,:,i,k),hor_rob(2,:,i,k),hor_rob(3,:,i,k));     
+                clearpoints(h_line_2(i));
+                addpoints(h_line(i),hor_rob(1,7:end,i,k),hor_rob(2,7:end,i,k),hor_rob(3,7:end,i,k));     
                 hold on;
-    %             addpoints(h_line_ref(i),hor_ref(1,:,i,k),hor_ref(2,:,i,k),hor_ref(3,:,i,k));
+                addpoints(h_line_2(i),hor_rob(1,1:6,i,k),hor_rob(2,1:6,i,k),hor_rob(3,1:6,i,k));
                 grid on;
                 xlim([pmin(1),pmax(1)])
                 ylim([pmin(2),pmax(2)])
@@ -401,7 +434,6 @@ if visualize
                       'LineWidth',2,'Color',colors(i,:));    
             end
         drawnow
-        pause(.5)
         end
         clf
         pause(0.5)
@@ -468,18 +500,6 @@ xlabel ('t [s]')
 % xlabel ('t [s]')
 
 %% DEBUG PLOTTING
-%         pos = Lambda*Gamma*Beta*x + A0*X0;
-%         t_sample_bla = 0:0.01:((k_hor-1)*h);
-%         Tau_bla = getTauSamples(T_segment,t_sample_bla,d,l);
-%         pos_ref = Tau_bla*Beta*x;
-%         p_ref = vec2mat(pos_ref,3)';
-%         p = vec2mat(pos,3)';
 
-%         figure(1)
-%         plot(0:(1*h):((k_hor-1)*h),p(1,:))
-%         hold on
-%         plot(t_sample_bla,p_ref(1,:))
-%         hold off
-%         
-%         figure(2)
-%         plot(rth_ref(1,:,3))  
+
+        

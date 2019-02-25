@@ -22,7 +22,7 @@ T_segment = 1.0; % fixed time length of each Bezier segment
 % Variables for ellipsoid constraint
 order = 2; % choose between 2 or 4 for the order of the super ellipsoid
 rmin = 0.5; % X-Y protection radius for collisions
-c = 1.0; % make this one for spherical constraint
+c = 1.5; % make this one for spherical constraint
 E = diag([1,1,c]);
 E1 = E^(-1);
 E2 = E^(-order);
@@ -49,18 +49,18 @@ rmin_init = 0.75;
 % [po,pf] = randomTest(N,pmin,pmax,rmin_init);
 
 % Initial positions
-po1 = [1.0,0.0,1.5];
-po2 = [-1.0,0.1,1.5];
-po3 = [-1.5,1.5,1.5];
-po4 = [1.5,-1.5,1.5];
-po = cat(3,po1,po2);
+po1 = [2.0,0.0,1.5];
+po2 = [-2.0,0.7,1.5];
+po3 = [-2.0,2.0,1.5];
+po4 = [2.0,-2.5,1.5];
+po = cat(3,po1,po2,po3,po4);
 
 % Final positions
-pf1 = [-1.0,0.0,1.5];
-pf2 = [1.0,0.1,1.5];
-pf3 = [1.5,-1.5,1.5];
-pf4 = [-1.5,1.5,1.5];
-pf  = cat(3,pf1,pf2);
+pf1 = [-2.0,0.0,1.5];
+pf2 = [2.0,0.7,1.5];
+pf3 = [2.0,-2.0,1.5];
+pf4 = [-2.0,2.0,1.5];
+pf  = cat(3,pf1,pf2,pf3,pf4);
 
 %% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES
 [A,B,A_inv,B_inv] = getABmodel(h);
@@ -245,11 +245,13 @@ end
 
 % First construct all the matrices that map the solution vector to samples
 % of the n-th derivative of position
-Ts = 0.01;  % Sampling period of final trajectory
 [A_sample, B_sample,A_inv_sample,B_inv_sample] = getABmodel(Ts);
 K_sample = length(0:Ts:h-Ts);
+K_sample2 = length((0:Ts:(k_hor-1)*h));
 [Lambda_sample, Lambda_vel_sample] = getLambda(A_sample,B_sample,K_sample);
 [A0_sample, A0_vel_sample] = getA0(A_sample,K_sample);
+[Lambda_sample2, Lambda_vel_sample2] = getLambda(A_sample,B_sample,K_sample2);
+[A0_sample2, A0_vel_sample2] = getA0(A_sample,K_sample2);
 for r = 0:d
     if r > 0
         Mu = T_ctrl_pts{r};
@@ -277,7 +279,9 @@ end
 % Sample states at 1/Ts Hz for the first applied input
 t_sample_r = 0:Ts:h-Ts;
 Tau_r = getTauSamples(T_segment,t_sample_r,d,l);
+Tau_r2 = getTauSamples(T_segment,0:Ts:((k_hor-1)*h),d,l);
 Phi_sample = Lambda_sample*Tau_r*Beta;
+Phi_sample2 = Lambda_sample2*Tau_r2*Beta;
 Phi_vel_sample = Lambda_vel_sample*Tau_r*Beta;
 
 % Init algorithm
@@ -294,14 +298,15 @@ for i = 1:N
       ref(:,1,r,i) = X0_ref(:,r,i); 
       ref_sample(:,1,r,i) = X0_ref(:,r,i);
    end
-   hor_ref(:,:,i,1) = repmat(poi,1,k_hor-1);
+   hor_ref(:,:,i,1) = repmat(poi,1,k_hor);
    hor_rob(:,:,i,1) = repmat(poi,1,k_hor);
 end
 % Admissible model error, helps filtering noise while accounting for disturbances
 err_tol = 0.1;  
 for k = 2:K
     % Update the current position for the collision avoidance basen in BVC
-    current_pos = squeeze(X0_ref(:,1,:));
+%     current_pos = X0(1:3,:);
+    current_pos = squeeze(X0_ref(1:3,1,:));
     for i = 1:N 
         % Correct initial point of the reference based on state feedback
         p_ref_prime = A_inv_sample*prev_state(:,i) + B_inv_sample*X0(4:6,i);
@@ -313,7 +318,10 @@ for k = 2:K
         f_tot = f_pf(:,:,i);
         
         % Construct BVC constraints
-        [A_coll, b_coll] = BVC_constraints(current_pos,d,i,rmin,order,E1,E2,(d+1)*3*l);
+        k_coll = k_hor-9;
+        x_length = (d+1)*3*l;
+%         [A_coll, b_coll] = BVC_constraints_state(current_pos,X0(:,i),Phi,A0,i,rmin,order,E1,E2,x_length,k_hor,k_coll);
+        [A_coll, b_coll] = BVC_constraints_ref(current_pos, d, i,rmin,order,E1,E2,x_length);
         
         % Augment the inequality constraints
         A_in_i = [A_in; A_coll];
@@ -336,10 +344,15 @@ for k = 2:K
         pos_i = vec2mat(Phi*x + A0*X0(:,i),3)';
         vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
         
-        % Sample at a higher frequency
+        % Sample at a higher frequency the interval 0:Ts:h-Ts
         pos_i_sample = vec2mat(Phi_sample*x + A0_sample*X0(:,i),3)';
+        pos_i_sample2 = vec2mat(Phi_sample2*x + A0_sample2*X0(:,i),3)';
         vel_i_sample = vec2mat(Phi_vel_sample*x + A0_vel_sample*X0(:,i),3)';
-
+        
+        % plotting only
+        pos_ix = [X0(1:3,i) pos_i];
+        pos_ix2 = [X0(1:3,i) pos_i_sample2];
+        
         % Sample the resulting reference Bezier curves at 1/h and 1/Ts
         for r = 1:d+1
            rth_ref(:,:,r) = vec2mat(Der_h{r}*x,3)';
@@ -370,33 +383,33 @@ for k = 2:K
         prev_input(:,i) = rth_ref_sample(:,end-1,1);
         
         % Reference and state prediction horizons - visualization purposes
-        hor_ref(:,:,i,k) = rth_ref(:,2:end,1);
+        hor_ref(:,:,i,k) = rth_ref(:,1:end,1);
         hor_rob(:,:,i,k) = pos_i;
         
 %         figure(1)
-%         plot(pos_i(1,:))
+%         plot(0:h:((k_hor)*h),pos_ix(1,:))
 %         hold on
-%         plot(rth_ref(1,1:end,1))
+%         plot(0:Ts:((k_hor-1)*h)+Ts,pos_ix2(1,:));
 %         hold off
 
     end
 end
 %%
-figure(6)
-for i = 1:N
-    for j = 1:N
-        if(i~=j)
-            differ = E1*(ref_sample(:,:,1,i) - ref_sample(:,:,1,j));
-            dist = (sum(differ.^order,1)).^(1/order);
-            plot(t, dist, 'LineWidth',1.5);
-            grid on;
-            hold on;
-            xlabel('t [s]')
-            ylabel('Inter-agent distance [m]');
-        end
-    end
-end
-plot(t,rmin*ones(length(t),1),'--r','LineWidth',1.5);
+% figure(6)
+% for i = 1:N
+%     for j = 1:N
+%         if(i~=j)
+%             differ = E1*(pos_k_i_sample(:,:,i) - pos_k_i_sample(:,:,j));
+%             dist = (sum(differ.^order,1)).^(1/order);
+%             plot(t, dist, 'LineWidth',1.5);
+%             grid on;
+%             hold on;
+%             xlabel('t [s]')
+%             ylabel('Inter-agent distance [m]');
+%         end
+%     end
+% end
+% plot(t,rmin*ones(length(t),1),'--r','LineWidth',1.5);
 %% 3D VISUALIZATION
 if visualize
     figure(1)
@@ -417,9 +430,9 @@ if visualize
             for i = 1:N
                 clearpoints(h_line(i));
                 clearpoints(h_line_2(i));
-                addpoints(h_line(i),hor_rob(1,7:end,i,k),hor_rob(2,7:end,i,k),hor_rob(3,7:end,i,k));     
+                addpoints(h_line(i),hor_rob(1,:,i,k),hor_rob(2,:,i,k),hor_rob(3,:,i,k));     
                 hold on;
-                addpoints(h_line_2(i),hor_rob(1,1:6,i,k),hor_rob(2,1:6,i,k),hor_rob(3,1:6,i,k));
+                addpoints(h_line_2(i),hor_rob(1,1:k_coll,i,k),hor_rob(2,1:k_coll,i,k),hor_rob(3,1:k_coll,i,k));
                 grid on;
                 xlim([pmin(1),pmax(1)])
                 ylim([pmin(2),pmax(2)])
@@ -447,8 +460,8 @@ figure(1)
 state = 1;
 grid on;
 hold on;
-plot(t, pos_k_i_sample(state,:,1),'Linewidth',1.5)
-plot(t, ref_sample(state,:,1,1),'--r','Linewidth',1.5)
+plot(tk, pos_k_i(state,:,1),'Linewidth',1.5)
+plot(tk, ref(state,:,1,1),'--r','Linewidth',1.5)
 ylabel([state_label{state} ' [m]'])
 xlabel ('t [s]')
 
@@ -457,8 +470,8 @@ state = 1;
 derivative = 2;
 grid on;
 hold on;
-plot(t, vel_k_i_sample(state,:,1),'Linewidth',1.5)
-plot(t, ref_sample(state,:,derivative,1),'--r','Linewidth',1.5)
+plot(tk, vel_k_i(state,:,1),'Linewidth',1.5)
+plot(tk, ref(state,:,derivative,1),'--r','Linewidth',1.5)
 ylabel([ der_label{derivative} state_label{state}  ' [m]'])
 xlabel ('t [s]')
 
@@ -486,7 +499,7 @@ state = 1;
 derivative = 3;
 grid on
 hold on;
-plot(t, ref_sample(state,:,derivative,1),'Linewidth',1.5)
+plot(tk, ref(state,:,derivative,1),'Linewidth',1.5)
 ylabel([ der_label{derivative} state_label{state}  ' [m]'])
 xlabel ('t [s]')
 

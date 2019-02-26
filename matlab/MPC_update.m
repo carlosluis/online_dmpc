@@ -1,6 +1,6 @@
-function x = MPC_update(l, deg_poly, Ain, bin, Aeq, H, mat_f_tot, f_tot, X0, X0_ref)
+function [x,exitflag] = MPC_update(l, deg_poly, Ain, bin, Aeq, H, mat_f_tot, f_tot, X0, X0_ref)
 constr_tol = 1e-8;
-options = optimoptions('quadprog','ConstraintTolerance',constr_tol);
+options = optimoptions('quadprog','Display','off','ConstraintTolerance',constr_tol);
 
 % Construct linear term of the function based on X0 
 % X0' = [px py pz vx vy vz]

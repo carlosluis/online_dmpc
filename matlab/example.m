@@ -50,14 +50,14 @@ rmin_init = 0.75;
 
 % Initial positions
 po1 = [2.0,0.0,1.5];
-po2 = [-2.0,0.7,1.5];
+po2 = [-2.0,0.3,1.5];
 po3 = [-2.0,2.0,1.5];
 po4 = [2.0,-2.5,1.5];
 po = cat(3,po1,po2,po3,po4);
 
 % Final positions
 pf1 = [-2.0,0.0,1.5];
-pf2 = [2.0,0.7,1.5];
+pf2 = [2.0,0.3,1.5];
 pf3 = [2.0,-2.0,1.5];
 pf4 = [-2.0,2.0,1.5];
 pf  = cat(3,pf1,pf2,pf3,pf4);
@@ -318,18 +318,24 @@ for k = 2:K
         f_tot = f_pf(:,:,i);
         
         % Construct BVC constraints
-        k_coll = k_hor-9;
+        k_coll = 2;
         x_length = (d+1)*3*l;
 %         [A_coll, b_coll] = BVC_constraints_state(current_pos,X0(:,i),Phi,A0,i,rmin,order,E1,E2,x_length,k_hor,k_coll);
-        [A_coll, b_coll] = BVC_constraints_ref(current_pos, d, i,rmin,order,E1,E2,x_length);
+        [A_coll, b_coll] = BVC_constraints_state(current_pos,X0_ref(1:3,1,i),Rho,A0,i,rmin,order,E1,E2,x_length,k_hor,k_coll);
+
+%         [A_coll, b_coll] = BVC_constraints_ref(current_pos, d, i,rmin,order,E1,E2,x_length);
         
         % Augment the inequality constraints
         A_in_i = [A_in; A_coll];
         b_in_i = [b_in; b_coll];
         
         % Solve QP
-        x = MPC_update(l,deg_poly, A_in_i, b_in_i, A_eq, H, mat_f_tot,...
-            f_tot, X0(:,i), X0_ref(:,:,i));
+        [x,exitflag] = MPC_update(l,deg_poly, A_in_i, b_in_i, A_eq, H, mat_f_tot,...
+                                  f_tot, X0(:,i), X0_ref(:,:,i));
+        if isempty(x)
+           fprintf("ERROR: No solution - exitflag %i\n",exitflag)
+           break;
+        end
         
         % Add noise to simulations
         rand_min_pos = -0.001;
@@ -392,6 +398,9 @@ for k = 2:K
 %         plot(0:Ts:((k_hor-1)*h)+Ts,pos_ix2(1,:));
 %         hold off
 
+    end
+    if isempty(x)
+       break;
     end
 end
 %%

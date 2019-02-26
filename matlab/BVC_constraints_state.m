@@ -15,7 +15,8 @@ for j = 1:N
        
        for k = 1:k_coll
            % RHS of inequality constraint
-           r = dist^(order-1)*((rmin/2+dist/2) - dist + differ*p_i/(dist^(order-1))) - differ*A0(3*(k-1)+1:3*k,:)*X0;
+%            r = dist^(order-1)*((rmin/2+dist/2) - dist + differ*p_i/(dist^(order-1))) - differ*A0(3*(k-1)+1:3*k,:)*X0;
+           r = dist^(order-1)*((rmin/2+dist/2) - dist + differ*p_i/(dist^(order-1)));
            diff_mat = [zeros(1,3*(k-1)) differ zeros(1,3*(K-k))];
            % LHS of inequality constraint Ain*x <= bin
            A_coll((idx-1)*k_coll + k,:) = -diff_mat*Phi;

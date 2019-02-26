@@ -32,7 +32,7 @@ deg_poly = 3; % degree of differentiability required for the position
 l = 3;  % number of Bezier curves to concatenate
 d = 5;  % degree of the bezier curve
 
-N = 2; % number of vehicles
+N = 4; % number of vehicles
 
 % Workspace boundaries
 pmin = [-5,-5,0.2];
@@ -49,15 +49,15 @@ rmin_init = 0.75;
 % [po,pf] = randomTest(N,pmin,pmax,rmin_init);
 
 % Initial positions
-po1 = [2.0,0.0,1.5];
-po2 = [-2.0,0.3,1.5];
+po1 = [2.0,2.0,1.5];
+po2 = [-2.0,-2.01,1.5];
 po3 = [-2.0,2.0,1.5];
-po4 = [2.0,-2.5,1.5];
+po4 = [2.0,-2.0,1.5];
 po = cat(3,po1,po2,po3,po4);
 
 % Final positions
-pf1 = [-2.0,0.0,1.5];
-pf2 = [2.0,0.3,1.5];
+pf1 = [-2.0,-2.0,1.5];
+pf2 = [2.0,2.0,1.5];
 pf3 = [2.0,-2.0,1.5];
 pf4 = [-2.0,2.0,1.5];
 pf  = cat(3,pf1,pf2,pf3,pf4);
@@ -318,13 +318,16 @@ for k = 2:K
         f_tot = f_pf(:,:,i);
         
         % Construct BVC constraints
-        k_coll = 2;
-        x_length = (d+1)*3*l;
+%         k_coll = 2;
+%         x_length = (d+1)*3*l;
 %         [A_coll, b_coll] = BVC_constraints_state(current_pos,X0(:,i),Phi,A0,i,rmin,order,E1,E2,x_length,k_hor,k_coll);
-        [A_coll, b_coll] = BVC_constraints_state(current_pos,X0_ref(1:3,1,i),Rho,A0,i,rmin,order,E1,E2,x_length,k_hor,k_coll);
-
+%         [A_coll, b_coll] = BVC_constraints_state(current_pos,X0_ref(1:3,1,i),Rho,A0,i,rmin,order,E1,E2,x_length,k_hor,k_coll);
 %         [A_coll, b_coll] = BVC_constraints_ref(current_pos, d, i,rmin,order,E1,E2,x_length);
-        
+
+        % include hard on demand collision avoidance
+        [A_coll, b_coll] = ondemand_constraints(hor_rob(:,:,:,k-1),Phi,...
+                                            X0(:,i),A0,i,rmin,order,E1,E2);
+                                            
         % Augment the inequality constraints
         A_in_i = [A_in; A_coll];
         b_in_i = [b_in; b_coll];
@@ -352,12 +355,7 @@ for k = 2:K
         
         % Sample at a higher frequency the interval 0:Ts:h-Ts
         pos_i_sample = vec2mat(Phi_sample*x + A0_sample*X0(:,i),3)';
-        pos_i_sample2 = vec2mat(Phi_sample2*x + A0_sample2*X0(:,i),3)';
         vel_i_sample = vec2mat(Phi_vel_sample*x + A0_vel_sample*X0(:,i),3)';
-        
-        % plotting only
-        pos_ix = [X0(1:3,i) pos_i];
-        pos_ix2 = [X0(1:3,i) pos_i_sample2];
         
         % Sample the resulting reference Bezier curves at 1/h and 1/Ts
         for r = 1:d+1
@@ -389,67 +387,34 @@ for k = 2:K
         prev_input(:,i) = rth_ref_sample(:,end-1,1);
         
         % Reference and state prediction horizons - visualization purposes
-        hor_ref(:,:,i,k) = rth_ref(:,1:end,1);
+        hor_ref(:,:,i,k) = rth_ref(:,:,1);
         hor_rob(:,:,i,k) = pos_i;
-        
-%         figure(1)
-%         plot(0:h:((k_hor)*h),pos_ix(1,:))
-%         hold on
-%         plot(0:Ts:((k_hor-1)*h)+Ts,pos_ix2(1,:));
-%         hold off
-
     end
     if isempty(x)
        break;
     end
 end
-%%
-% figure(6)
-% for i = 1:N
-%     for j = 1:N
-%         if(i~=j)
-%             differ = E1*(pos_k_i_sample(:,:,i) - pos_k_i_sample(:,:,j));
-%             dist = (sum(differ.^order,1)).^(1/order);
-%             plot(t, dist, 'LineWidth',1.5);
-%             grid on;
-%             hold on;
-%             xlabel('t [s]')
-%             ylabel('Inter-agent distance [m]');
-%         end
-%     end
-% end
-% plot(t,rmin*ones(length(t),1),'--r','LineWidth',1.5);
 %% 3D VISUALIZATION
 if visualize
     figure(1)
     colors = distinguishable_colors(N);
-    beta = 0.8;
-    colors_ref = [1,0,0]; 
-
     set(gcf, 'Position', get(0, 'Screensize'));
     set(gcf,'currentchar',' ')
     while get(gcf,'currentchar')==' '
-
         for i = 1:N
         h_line(i) = animatedline('LineWidth',2,'Color',colors(i,:),'LineStyle',':');
-        h_line_2(i) = animatedline('LineWidth',2,'Color','k','LineStyle',':');
-    %     h_line_ref(i) = animatedline('LineWidth',2,'Color',colors_ref(i,:),'LineStyle','--');
         end
         for k = 1:K
             for i = 1:N
                 clearpoints(h_line(i));
-                clearpoints(h_line_2(i));
                 addpoints(h_line(i),hor_rob(1,:,i,k),hor_rob(2,:,i,k),hor_rob(3,:,i,k));     
                 hold on;
-                addpoints(h_line_2(i),hor_rob(1,1:k_coll,i,k),hor_rob(2,1:k_coll,i,k),hor_rob(3,1:k_coll,i,k));
                 grid on;
                 xlim([pmin(1),pmax(1)])
                 ylim([pmin(2),pmax(2)])
                 zlim([0,pmax(3)])
                 plot3(pos_k_i(1,k,i),pos_k_i(2,k,i),pos_k_i(3,k,i),'o',...
                     'LineWidth',2,'Color',colors(i,:));
-    %             plot3(ref(1,k,1,i),ref(2,k,1,i),ref(3,k,1,i),'o',...
-    %                 'LineWidth',2,'Color',colors_ref(i,:));
                 plot3(po(1,1,i), po(1,2,i), po(1,3,i),'^',...
                       'LineWidth',2,'Color',colors(i,:));
                 plot3(pf(1,1,i), pf(1,2,i), pf(1,3,i),'x',...
@@ -461,6 +426,23 @@ if visualize
         pause(0.5)
     end
 end
+
+%%
+figure(6)
+for i = 1:N
+    for j = 1:N
+        if(i~=j)
+            differ = E1*(pos_k_i_sample(:,:,i) - pos_k_i_sample(:,:,j));
+            dist = (sum(differ.^order,1)).^(1/order);
+            plot(t, dist, 'LineWidth',1.5);
+            grid on;
+            hold on;
+            xlabel('t [s]')
+            ylabel('Inter-agent distance [m]');
+        end
+    end
+end
+plot(t,rmin*ones(length(t),1),'--r','LineWidth',1.5);
 %% PLOT STATES AND REFERENCE TRAJECTORIES
 state_label = {'x', 'y', 'z'};
 der_label = {'p', 'v', 'a', 'j', 's'};

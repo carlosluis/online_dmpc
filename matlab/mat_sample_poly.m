@@ -1,6 +1,6 @@
-function Tau_final = getTauSamples(T_segment,t_vec,dim, l)
-% Tau will return a 3D matrix, where the last subscript represents from
-% which segment of the Bezier curve the sample is to be taken
+function T_sample_poly = mat_sample_poly(T_segment, t_vec, dim, l)
+% Create a cell array Tau with the appropriate samples 
+% to be taken from each segment
 T_final = l*T_segment;
 Tau{l} = [];
 for k = 1:length(t_vec)
@@ -17,6 +17,5 @@ for k = 1:length(t_vec)
     end
 end
 
-Tau_final = getGammaSamples(Tau,length(t_vec),dim);
-
+T_sample_poly = get_sample_mat(Tau,length(t_vec),dim);
 end

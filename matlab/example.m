@@ -4,10 +4,21 @@ close all
 warning('off','all')
 visualize = 1;  % 3D visualization of trajectory and predictions
 
+% Define model parameters for the quad + controller system
+model_params.zeta_xy = 0.6502;
+model_params.tau_xy = 0.3815;
+model_params.omega_xy = 1/model_params.tau_xy;
+model_params.zeta_z = 0.9103;
+model_params.tau_z = 0.3;
+model_params.omega_z = 1/model_params.tau_z;
+
 % Disturbance applied to the model within a time frame
 disturbance = 0;
 agent_disturb = [1];
 disturbance_k = 40:44;
+
+% dimension of space - 3 = 3D, 2 = 2D
+ndim = 3; 
 
 % Time settings and variables
 T = 20; % Trajectory final time
@@ -34,13 +45,11 @@ d = 5;  % degree of the bezier curve
 
 N = 4; % number of vehicles
 
-% Workspace boundaries
-pmin = [-5,-5,0.2];
-pmax = [5,5,4.2];
-
-% Acceleration limits
-amax = 2;
-amin = -2;
+% Physical limits
+phys_limits.pmin = [-5,-5,0.2];
+phys_limits.pmax = [5,5,4.2];
+phys_limits.amax = 2;
+phys_limits.amin = -2;
 
 % Minimum distance between vehicles in m
 rmin_init = 0.75;
@@ -63,46 +72,21 @@ pf4 = [-2.0,2.0,1.5];
 pf  = cat(3,pf1,pf2,pf3,pf4);
 
 %% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES
-[A,B,A_inv,B_inv] = getABmodel(h);
- 
-[Lambda, Lambda_vel] = getLambda(A,B,k_hor);
-Lambda_K = Lambda(end-2:end,:); % to be used in the cost function
-
-[A0, A0_vel] = getA0(A,k_hor);
-A0_K = A0(end-2:end,:);
+[model, inv_model] = get_model(h, model_params);
+Lambda = get_lambda(model.A, model.B, k_hor);
+A0 = get_a0(model.A, k_hor);
 
 %% CONSTRUCT MATRICES TO WORK WITH BEZIER CURVES
-% Delta - converts control points into polynomial coefficients
-delta = Bern2power(d);
-delta3d = augment_array_ndim(delta,3);
+% Beta - converts control points into polynomial coefficients
+Beta = mat_bernstein2power(d,l,ndim);
 
-% Then we assemble a block-diagonal matrix based on the number of segments
-% this matrix is used to compute the minimum snap cost function
-Beta = kron(eye(l),delta3d);
+% Gamma - sample the polynomial at different time steps
+Gamma = mat_sample_poly(T_segment,0:h:((k_hor-1)*h),d,l);
 
-% Beta is also used to sample the Bezier curve at different times
-% We will use it to minimize the error at the end of the curve, by sampling
-% our curve at discrete time steps with length 'h'
-Tau = getTauPos(h,T_segment,d);
-Tau3d_all = augment_array_ndim(Tau,3);
-
-% To eliminate overlapping control points between segments
-Tau3d_k = Tau3d_all(1:end-3,:);
-
-Gamma = blkdiag(kron(eye(l-1),Tau3d_k),Tau3d_all);
-
-% Construct matrix Q: Hessian for each of the polynomial derivatives
+% Alpha - sum of squared derivatives of the position
 cr = zeros(1,d+1); % weights on degree of derivative deg = [0 1 ... d]
 cr(3) = .01;
-Q = getQ(d,T_segment,cr);
-Q = sum(Q,3);
-
-% This Q is only for one dimension, augment using our helper function
-Q3d = augment_array_ndim(Q,3);
-
-% Finally we compose the whole matrix as a block diagonal
-Alpha = kron(eye(l),Q3d);
-
+Alpha = mat_sum_sqrd_derivatives(d,T_segment,cr,l,ndim);
 %% CONSTRUCT TERMS OF THE COST FUNCTION
 % The Hessian for the minimum snap cost function is
 H_snap = Beta'*Alpha*Beta;
@@ -110,20 +94,11 @@ H_snap = Beta'*Alpha*Beta;
 % For the goal tracking error cost function, define a weight matrix S
 s = 10;
 spd = 4;
-S = s*[zeros(3*(k_hor-spd),3*k_hor);
-       zeros(3*spd,3*(k_hor-spd)) eye(3*spd)];
-Phi = Lambda*Gamma*Beta;
-Phi_vel = Lambda_vel*Gamma*Beta;
+S = s*[zeros(3*(k_hor-spd), 3*k_hor);
+       zeros(3*spd, 3*(k_hor-spd)) eye(3*spd)];
+Phi = Lambda.pos*Gamma*Beta;
+Phi_vel = Lambda.vel*Gamma*Beta;
 H_err = Phi'*S*Phi;
-
-% For the reference tracking error cost function:
-% We want to minimize the error between reference and followed trajectory
-s_ref = 10;
-spd = k_hor;
-S_ref = s_ref*[zeros(3*(k_hor-spd),3*k_hor);
-       zeros(3*spd,3*(k_hor-spd)) eye(3*spd)];
-Rho = Gamma*Beta;
-H_ref = Rho'*S_ref*Rho;
 
 % The complete Hessian is simply the sum of the two
 H = H_err + H_snap;
@@ -137,105 +112,18 @@ end
 
 % We can also construct the matrix that will then be multiplied by the
 % initial condition -> X0'*A0'*S*Lambda*Gamma*Beta
-mat_f_x0 = A0'*S*Lambda*Gamma*Beta;
-mat_f_tot = -mat_f_x0;
+mat_f_x0 = A0.pos'*S*Lambda.pos*Gamma*Beta;
 %% CONSTRUCT INEQUALITY CONSTRAINT MATRICES
 % Types of constraints: 1) Acceleration limits 2) workspace boundaries
-
 % We need to create the matrices that map position control points into c-th
 % derivative control points
-der_mats = getDerivatives(d);
-n = d; % n represents the n-th derivative of position
-for k = 1:d
-    aux = 1;
-    for k_aux = d:-1:k
-       aux = der_mats{k_aux}*aux;   
-    end
-    T_ctrl_pts{n}(:,:) = aux; 
-    n = n - 1;
-end
-
-% ACCELERATION CONSTRAINT
-% Acceleration is a quadratic Bezier curve, The mapping between position
-% and acceleration control points is given by the linear mapping
-M = T_ctrl_pts{2};
-
-% convert this matrix into a 3d version
-M_3d = augment_array_ndim(M,3);
-Sigma_acc = kron(eye(l),M_3d);
-
-% Multiplying the decision vector X times Sigma_acc gives acc control pts
-% We define a delta_acc that converts acc control points into polynomials
-delta_acc = Bern2power(d-2);
-         
-delta_acc_3d = augment_array_ndim(delta_acc,3);
-Beta_acc = kron(eye(l),delta_acc_3d);
-
-% Define Tau_acc that evaluates the polynomial at different times
-% Define the times at which we desire to sample between 0s and 2.4s
-% NOTE: Always constrain the first 
-t_sample_acc = h:(3*h):((k_hor-1)*h);
-Tau_acc = getTauSamples(T_segment,t_sample_acc,d-2,l);
-
-% Now we compose the constraint in (A,b) form to pass to the solver
-A_in_acc = [Tau_acc*Beta_acc*Sigma_acc;
-           -Tau_acc*Beta_acc*Sigma_acc];
-
-% The vector is defined by the maximum and minimum acc allowed 
-b_in_acc = [amax*ones(3*length(t_sample_acc),1);
-           -amin*ones(3*length(t_sample_acc),1)];
-
-% POSITION REFERENCE CONSTRAINT - WORKSPACE BOUNDARIES
-t_sample_pos_ref = h:(3*h):((k_hor-1)*h);
-Tau_pos_ref = getTauSamples(T_segment,t_sample_pos_ref,d,l);
-
-% Now we compose the constraint in (A,b) form to pass to the solver
-A_in_pos_ref = [Tau_pos_ref*Beta;
-                -Tau_pos_ref*Beta];
-
-% The vector b_in_pos_ref depends solely on the limits pmin and pmax
-b_in_pos_ref = [repmat(pmax',length(t_sample_pos_ref),1);
-                repmat(-pmin',length(t_sample_pos_ref),1)];
-    
-
-% The complete matrix for constraints is just the concatenation of both
-A_in = [A_in_acc; A_in_pos_ref];
-b_in = [b_in_acc; b_in_pos_ref];
+T_ctrl_pts = cell_derivate_ctrl_pts(d);
+[A_in, b_in] = build_ineq_constraints(d,l,h,ndim,k_hor,T_segment,...
+                                      phys_limits,T_ctrl_pts, Beta);
 
 %% CONSTRUCT EQUALITY CONSTRAINT MATRICES
 % Types of constraints: 1) Continuity constraints up to degree deg_poly
-% From the control points of each derivative of the Bezier curve, we must
-% select the first point and the overlapping points between segments
-D = zeros(l, 3*(d+1));
-for k = 1:l
-    if k==1
-       D(1,1) = 1; 
-    else
-       D(k,(k-1)*(d+1)) = 1;
-       D(k,(k-1)*(d+1) + 1) = -1;
-    end
-end
-
-A_eq = augment_array_ndim(D,3);
-
-% Make T_ctrl_pts to be a 3D matrix and representing l Bezier segments 
-if deg_poly > 0
-    T_ctrl_pts_3d{deg_poly} = [];
-    D_der{deg_poly} = [];
-    for k = 1:deg_poly
-        % Select the ctrl points we need and sustract them
-        for n = 1:l
-            if n == 1
-                D_der{k}(1,:) = [T_ctrl_pts{k}(1,:) zeros(1,(l-1)*(d+1))];
-            else
-                cols = (n-2)*(d+1)+1: (n)*(d+1);
-                D_der{k}(n,cols) = [T_ctrl_pts{k}(end,:) -T_ctrl_pts{k}(1,:)];
-            end
-        end
-        % Construct equality constraint matrix by stacking matrices together
-        A_eq = [A_eq;augment_array_ndim(D_der{k},3)];
-    end
-end
+A_eq = build_eq_constraints(d,l,ndim,deg_poly,T_ctrl_pts);
 % The constant vector b_eq will be updated within the solver function,
 % since it requires knowledge of the initial condition of the reference
 
@@ -245,13 +133,11 @@ end
 
 % First construct all the matrices that map the solution vector to samples
 % of the n-th derivative of position
-[A_sample, B_sample,A_inv_sample,B_inv_sample] = getABmodel(Ts);
+[model_s, inv_model_s] = get_model(Ts,model_params);
 K_sample = length(0:Ts:h-Ts);
-K_sample2 = length((0:Ts:(k_hor-1)*h));
-[Lambda_sample, Lambda_vel_sample] = getLambda(A_sample,B_sample,K_sample);
-[A0_sample, A0_vel_sample] = getA0(A_sample,K_sample);
-[Lambda_sample2, Lambda_vel_sample2] = getLambda(A_sample,B_sample,K_sample2);
-[A0_sample2, A0_vel_sample2] = getA0(A_sample,K_sample2);
+Lambda_s = get_lambda(model_s.A,model_s.B,K_sample);
+A0_s = get_a0(model_s.A,K_sample);
+
 for r = 0:d
     if r > 0
         Mu = T_ctrl_pts{r};
@@ -261,28 +147,24 @@ for r = 0:d
         Sigma_r = eye(3*(d+1)*l);
     end
     
-    delta_r = Bern2power(d-r);     
-    delta_r_3d = augment_array_ndim(delta_r,3);
-    Beta_r = kron(eye(l),delta_r_3d);
+    Beta_r = mat_bernstein2power(d-r,l,ndim);     
     
     % Sample Bezier curves at 1/h Hz for the whole horizon
     t_sample_r = 0:h:((k_hor-1)*h);
-    Tau_r = getTauSamples(T_segment,t_sample_r,d-r,l);
+    Tau_r = mat_sample_poly(T_segment,t_sample_r,d-r,l);
     Der_h{r+1} = Tau_r*Beta_r*Sigma_r;
     
     % Sample Bezier curves at 1/Ts Hz for the first applied input
     t_sample_r = Ts:Ts:h;
-    Tau_r = getTauSamples(T_segment,t_sample_r,d-r,l);
+    Tau_r = mat_sample_poly(T_segment,t_sample_r,d-r,l);
     Der_ts{r+1} = Tau_r*Beta_r*Sigma_r;
 end
 
 % Sample states at 1/Ts Hz for the first applied input
 t_sample_r = 0:Ts:h-Ts;
-Tau_r = getTauSamples(T_segment,t_sample_r,d,l);
-Tau_r2 = getTauSamples(T_segment,0:Ts:((k_hor-1)*h),d,l);
-Phi_sample = Lambda_sample*Tau_r*Beta;
-Phi_sample2 = Lambda_sample2*Tau_r2*Beta;
-Phi_vel_sample = Lambda_vel_sample*Tau_r*Beta;
+Tau_r = mat_sample_poly(T_segment,t_sample_r,d,l);
+Phi_sample = Lambda_s.pos*Tau_r*Beta;
+Phi_vel_sample = Lambda_s.vel*Tau_r*Beta;
 
 % Init algorithm
 for i = 1:N
@@ -301,39 +183,30 @@ for i = 1:N
    hor_ref(:,:,i,1) = repmat(poi,1,k_hor);
    hor_rob(:,:,i,1) = repmat(poi,1,k_hor);
 end
-% Admissible model error, helps filtering noise while accounting for disturbances
+
+% Admissible model error, helps filtering noise
 err_tol = 0.1;  
 for k = 2:K
-    % Update the current position for the collision avoidance basen in BVC
-%     current_pos = X0(1:3,:);
-    current_pos = squeeze(X0_ref(1:3,1,:));
     for i = 1:N 
         % Correct initial point of the reference based on state feedback
-        p_ref_prime = A_inv_sample*prev_state(:,i) + B_inv_sample*X0(4:6,i);
+        p_ref_prime = inv_model_s.A*prev_state(:,i) + inv_model_s.B*X0(4:6,i);
         err = p_ref_prime - prev_input(:,i);
         if abs(err) < err_tol
             err = 0;
         end
         X0_ref(:,1,i) = X0_ref(:,1,i) + err;        
         f_tot = f_pf(:,:,i);
-        
-        % Construct BVC constraints
-%         k_coll = 2;
-%         x_length = (d+1)*3*l;
-%         [A_coll, b_coll] = BVC_constraints_state(current_pos,X0(:,i),Phi,A0,i,rmin,order,E1,E2,x_length,k_hor,k_coll);
-%         [A_coll, b_coll] = BVC_constraints_state(current_pos,X0_ref(1:3,1,i),Rho,A0,i,rmin,order,E1,E2,x_length,k_hor,k_coll);
-%         [A_coll, b_coll] = BVC_constraints_ref(current_pos, d, i,rmin,order,E1,E2,x_length);
 
         % include hard on demand collision avoidance
         [A_coll, b_coll] = ondemand_constraints(hor_rob(:,:,:,k-1),Phi,...
-                                            X0(:,i),A0,i,rmin,order,E1,E2);
+                                            X0(:,i),A0.pos,i,rmin,order,E1,E2);
                                             
         % Augment the inequality constraints
         A_in_i = [A_in; A_coll];
         b_in_i = [b_in; b_coll];
         
         % Solve QP
-        [x,exitflag] = MPC_update(l,deg_poly, A_in_i, b_in_i, A_eq, H, mat_f_tot,...
+        [x,exitflag] = MPC_update(l,deg_poly, A_in_i, b_in_i, A_eq, H, mat_f_x0,...
                                   f_tot, X0(:,i), X0_ref(:,:,i));
         if isempty(x)
            fprintf("ERROR: No solution - exitflag %i\n",exitflag)
@@ -350,12 +223,12 @@ for k = 2:K
         random_noise_vel = rand_min_vel + (rand_max_vel - rand_min_vel).*rand(3,1);
         
         % Apply input to model starting form our previous init condition
-        pos_i = vec2mat(Phi*x + A0*X0(:,i),3)';
-        vel_i = vec2mat(Phi_vel*x + A0_vel*X0(:,i),3)';
+        pos_i = vec2mat(Phi*x + A0.pos*X0(:,i),3)';
+        vel_i = vec2mat(Phi_vel*x + A0.vel*X0(:,i),3)';
         
         % Sample at a higher frequency the interval 0:Ts:h-Ts
-        pos_i_sample = vec2mat(Phi_sample*x + A0_sample*X0(:,i),3)';
-        vel_i_sample = vec2mat(Phi_vel_sample*x + A0_vel_sample*X0(:,i),3)';
+        pos_i_sample = vec2mat(Phi_sample*x + A0_s.pos*X0(:,i),3)';
+        vel_i_sample = vec2mat(Phi_vel_sample*x + A0_s.vel*X0(:,i),3)';
         
         % Sample the resulting reference Bezier curves at 1/h and 1/Ts
         for r = 1:d+1
@@ -410,9 +283,9 @@ if visualize
                 addpoints(h_line(i),hor_rob(1,:,i,k),hor_rob(2,:,i,k),hor_rob(3,:,i,k));     
                 hold on;
                 grid on;
-                xlim([pmin(1),pmax(1)])
-                ylim([pmin(2),pmax(2)])
-                zlim([0,pmax(3)])
+                xlim([phys_limits.pmin(1), phys_limits.pmax(1)])
+                ylim([phys_limits.pmin(2), phys_limits.pmax(2)])
+                zlim([0,phys_limits.pmax(3)])
                 plot3(pos_k_i(1,k,i),pos_k_i(2,k,i),pos_k_i(3,k,i),'o',...
                     'LineWidth',2,'Color',colors(i,:));
                 plot3(po(1,1,i), po(1,2,i), po(1,3,i),'^',...
@@ -427,7 +300,7 @@ if visualize
     end
 end
 
-%%
+%% PLOT INTER-AGENT DISTANCES OVER TIME
 figure(6)
 for i = 1:N
     for j = 1:N
@@ -501,9 +374,4 @@ xlabel ('t [s]')
 % hold on;
 % plot(tk, ref(state,:,derivative,1),'Linewidth',1.5)
 % ylabel([ der_label{derivative} state_label{state}  ' [m]'])
-% xlabel ('t [s]')
-
-%% DEBUG PLOTTING
-
-
-        
+% xlabel ('t [s]')    

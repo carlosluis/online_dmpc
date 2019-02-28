@@ -2,7 +2,7 @@ clc
 clear all
 close all
 warning('off','all')
-visualize = 1;  % 3D visualization of trajectory and predictions
+visualize = 0;  % 3D visualization of trajectory and predictions
 
 % Define model parameters for the quad + controller system
 model_params.zeta_xy = 0.6502;
@@ -13,9 +13,9 @@ model_params.tau_z = 0.3;
 model_params.omega_z = 1/model_params.tau_z;
 
 % Disturbance applied to the model within a time frame
-disturbance = 0;
+disturbance = 1;
 agent_disturb = [1];
-disturbance_k = 40:44;
+disturbance_k = 40:60;
 
 % dimension of space - 3 = 3D, 2 = 2D
 ndim = 3; 
@@ -43,7 +43,11 @@ deg_poly = 3; % degree of differentiability required for the position
 l = 3;  % number of Bezier curves to concatenate
 d = 5;  % degree of the bezier curve
 
-N = 4; % number of vehicles
+N = 1; % number of vehicles
+
+% Noise standard deviation information based on Vicon data
+std_p = 0.00228682;
+std_v = 0.0109302;
 
 % Physical limits
 phys_limits.pmin = [-5,-5,0.2];
@@ -127,10 +131,7 @@ A_eq = build_eq_constraints(d,l,ndim,deg_poly,T_ctrl_pts);
 % The constant vector b_eq will be updated within the solver function,
 % since it requires knowledge of the initial condition of the reference
 
-%% MAIN LOOP
-% We initialize the algorithm with every agent in its initial position and
-% every derivative to be zero.
-
+%% MATRICES TO DECODE SOLUTION
 % First construct all the matrices that map the solution vector to samples
 % of the n-th derivative of position
 [model_s, inv_model_s] = get_model(Ts,model_params);
@@ -166,7 +167,7 @@ Tau_r = mat_sample_poly(T_segment,t_sample_r,d,l);
 Phi_sample = Lambda_s.pos*Tau_r*Beta;
 Phi_vel_sample = Lambda_s.vel*Tau_r*Beta;
 
-% Init algorithm
+%% INIT ALGORITHM
 for i = 1:N
    poi = po(:,:,i)';
    voi = zeros(3,1);
@@ -186,42 +187,39 @@ end
 
 % Admissible model error, helps filtering noise
 err_tol = 0.1;  
+
+%% MAIN LOOP
 for k = 2:K
     for i = 1:N 
         % Correct initial point of the reference based on state feedback
-        p_ref_prime = inv_model_s.A*prev_state(:,i) + inv_model_s.B*X0(4:6,i);
-        err = p_ref_prime - prev_input(:,i);
+        p_ref = inv_model_s.A*prev_state(:,i) + inv_model_s.B*X0(4:6,i);
+        err = p_ref - prev_input(:,i);
         if abs(err) < err_tol
             err = 0;
+        else
+            hola = 1;
         end
-        X0_ref(:,1,i) = X0_ref(:,1,i) + err;        
+%         X0_ref(:,1,i) = X0_ref(:,1,i) + err;
+        X0_ref(:,1,i) = X0(1:3);
+        
         f_tot = f_pf(:,:,i);
 
-        % include hard on demand collision avoidance
+        % Include hard on demand collision avoidance
         [A_coll, b_coll] = ondemand_constraints(hor_rob(:,:,:,k-1),Phi,...
-                                            X0(:,i),A0.pos,i,rmin,order,E1,E2);
-                                            
+                                                X0(:,i),A0.pos,i,rmin,...
+                                                order,E1,E2);
         % Augment the inequality constraints
         A_in_i = [A_in; A_coll];
         b_in_i = [b_in; b_coll];
         
         % Solve QP
-        [x,exitflag] = MPC_update(l,deg_poly, A_in_i, b_in_i, A_eq, H, mat_f_x0,...
-                                  f_tot, X0(:,i), X0_ref(:,:,i));
+        [x,exitflag] = MPC_update(l,deg_poly, A_in_i, b_in_i, A_eq, H,...
+                                  mat_f_x0,f_tot, X0(:,i), X0_ref(:,:,i));
         if isempty(x)
            fprintf("ERROR: No solution - exitflag %i\n",exitflag)
            break;
         end
-        
-        % Add noise to simulations
-        rand_min_pos = -0.001;
-        rand_max_pos = 0.001;
-        random_noise_pos = rand_min_pos + (rand_max_pos - rand_min_pos).*rand(3,1);
-
-        rand_min_vel = -0.01;
-        rand_max_vel = .01;
-        random_noise_vel = rand_min_vel + (rand_max_vel - rand_min_vel).*rand(3,1);
-        
+     
         % Apply input to model starting form our previous init condition
         pos_i = vec2mat(Phi*x + A0.pos*X0(:,i),3)';
         vel_i = vec2mat(Phi_vel*x + A0.vel*X0(:,i),3)';
@@ -231,30 +229,32 @@ for k = 2:K
         vel_i_sample = vec2mat(Phi_vel_sample*x + A0_s.vel*X0(:,i),3)';
         
         % Sample the resulting reference Bezier curves at 1/h and 1/Ts
+        cols = 2+(k-2)*(h/Ts):1+(k-1)*(h/Ts);
         for r = 1:d+1
            rth_ref(:,:,r) = vec2mat(Der_h{r}*x,3)';
            rth_ref_sample(:,:,r) = vec2mat(Der_ts{r}*x,3)';
            X0_ref(:,r,i) = rth_ref_sample(:,end,r);
            ref(:,k,r,i) = rth_ref(:,2,r);
-           ref_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),r,i) = rth_ref_sample(:,:,r);
+           ref_sample(:,cols,r,i) = rth_ref_sample(:,:,r);
         end
-
         if ~disturbance || ~ismember(k,disturbance_k)
-            % Initial conditions for next MPC cycle
-            X0(:,i) = [pos_i_sample(:,end); vel_i_sample(:,end)];
-            prev_state(:,i) = [pos_i_sample(:,end-1); vel_i_sample(:,end-1)];
+            % Initial conditions for next MPC cycle - based on sensing
+            X0(:,i) = [pos_i_sample(:,end)  + normrnd(0,std_p,3,1);
+                       vel_i_sample(:,end) + normrnd(0,std_v,3,1)];
+            prev_state(:,i) = [pos_i_sample(:,end-1)+normrnd(0,std_p,3,1);
+                               vel_i_sample(:,end-1)+normrnd(0,std_v,3,1)];
 
             % Update agent's states at 1/h and 1/Ts frequencies
-            pos_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = pos_i_sample;
-            vel_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = vel_i_sample;
+            pos_k_i_sample(:,cols,i) = pos_i_sample;
+            vel_k_i_sample(:,cols,i) = vel_i_sample;
             pos_k_i(:,k,i) = X0(1:3,i);
             vel_k_i(:,k,i) = X0(4:6,i);
         elseif disturbance && ismember(k,disturbance_k)
             % APPLY SIMULATED DISTURBANCE
             X0(:,i) = [0.5*ones(3,1); 0.0*ones(3,1)];
             prev_state(:,i) = X0(:,i);
-            pos_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = repmat(X0(1:3,i),1,h/Ts);
-            vel_k_i_sample(:,2+(k-2)*(h/Ts):1+(k-1)*(h/Ts),i) = repmat(X0(4:6,i),1,h/Ts);
+            pos_k_i_sample(:,cols,i) = repmat(X0(1:3,i),1,h/Ts);
+            vel_k_i_sample(:,cols,i) = repmat(X0(4:6,i),1,h/Ts);
         end 
                     
         prev_input(:,i) = rth_ref_sample(:,end-1,1);
@@ -301,21 +301,21 @@ if visualize
 end
 
 %% PLOT INTER-AGENT DISTANCES OVER TIME
-figure(6)
-for i = 1:N
-    for j = 1:N
-        if(i~=j)
-            differ = E1*(pos_k_i_sample(:,:,i) - pos_k_i_sample(:,:,j));
-            dist = (sum(differ.^order,1)).^(1/order);
-            plot(t, dist, 'LineWidth',1.5);
-            grid on;
-            hold on;
-            xlabel('t [s]')
-            ylabel('Inter-agent distance [m]');
-        end
-    end
-end
-plot(t,rmin*ones(length(t),1),'--r','LineWidth',1.5);
+% figure(6)
+% for i = 1:N
+%     for j = 1:N
+%         if(i~=j)
+%             differ = E1*(pos_k_i_sample(:,:,i) - pos_k_i_sample(:,:,j));
+%             dist = (sum(differ.^order,1)).^(1/order);
+%             plot(t, dist, 'LineWidth',1.5);
+%             grid on;
+%             hold on;
+%             xlabel('t [s]')
+%             ylabel('Inter-agent distance [m]');
+%         end
+%     end
+% end
+% plot(t,rmin*ones(length(t),1),'--r','LineWidth',1.5);
 %% PLOT STATES AND REFERENCE TRAJECTORIES
 state_label = {'x', 'y', 'z'};
 der_label = {'p', 'v', 'a', 'j', 's'};

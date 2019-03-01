@@ -15,7 +15,7 @@ model_params.omega_z = 1/model_params.tau_z;
 % Disturbance applied to the model within a time frame
 disturbance = 1;
 agent_disturb = [1];
-disturbance_k = 40:60;
+disturbance_k = 30:80;
 
 % dimension of space - 3 = 3D, 2 = 2D
 ndim = 3; 
@@ -156,7 +156,7 @@ for r = 0:d
     Der_h{r+1} = Tau_r*Beta_r*Sigma_r;
     
     % Sample Bezier curves at 1/Ts Hz for the first applied input
-    t_sample_r = Ts:Ts:h;
+    t_sample_r = 0:Ts:h-Ts;
     Tau_r = mat_sample_poly(T_segment,t_sample_r,d-r,l);
     Der_ts{r+1} = Tau_r*Beta_r*Sigma_r;
 end
@@ -184,23 +184,39 @@ for i = 1:N
    hor_ref(:,:,i,1) = repmat(poi,1,k_hor);
    hor_rob(:,:,i,1) = repmat(poi,1,k_hor);
 end
-
+pred_X0 = X0;
 % Admissible model error, helps filtering noise
-err_tol = 0.1;  
+err_tol_pos = 0.1;
+err_tol_vel = 0.05;
 
 %% MAIN LOOP
 for k = 2:K
     for i = 1:N 
         % Correct initial point of the reference based on state feedback
-        p_ref = inv_model_s.A*prev_state(:,i) + inv_model_s.B*X0(4:6,i);
-        err = p_ref - prev_input(:,i);
-        if abs(err) < err_tol
-            err = 0;
-        else
-            hola = 1;
+%         p_ref = inv_model_s.A*prev_state(:,i) + inv_model_s.B*X0(4:6,i);
+%         err = p_ref - prev_input(:,i);
+%         if abs(err) < err_tol
+%             err = 0;
+%         else
+%             hola = 1;
+%         end
+%         X0_ref(:,1,i) = X0_ref(:,1,i) + 0.1*err;
+%         X0_ref(:,2,i) = X0(4:6);
+        % Compare the expected position vs the sensed position
+        err_pos = X0(1:3,i) - pred_X0(1:3,i);
+        err_vel = X0(4:6,i) - pred_X0(4:6,i);
+        
+        % Adjust the reference based on this error
+        if abs(err_pos) < err_tol_pos
+            err_pos = 0;
         end
-%         X0_ref(:,1,i) = X0_ref(:,1,i) + err;
-        X0_ref(:,1,i) = X0(1:3);
+        
+        if abs(err_vel) < err_tol_vel
+            err_vel = 0;
+        end
+        
+        X0_ref(:,1,i) = X0_ref(:,1,i) + 1.0*err_pos;
+        X0_ref(:,2,i) = X0_ref(:,2,i) + 0.8*err_vel;
         
         f_tot = f_pf(:,:,i);
 
@@ -216,8 +232,8 @@ for k = 2:K
         [x,exitflag] = MPC_update(l,deg_poly, A_in_i, b_in_i, A_eq, H,...
                                   mat_f_x0,f_tot, X0(:,i), X0_ref(:,:,i));
         if isempty(x)
-           fprintf("ERROR: No solution - exitflag %i\n",exitflag)
-           break;
+            fprintf("ERROR: No solution - exitflag %i\n",exitflag)
+            break;
         end
      
         % Apply input to model starting form our previous init condition
@@ -225,38 +241,48 @@ for k = 2:K
         vel_i = vec2mat(Phi_vel*x + A0.vel*X0(:,i),3)';
         
         % Sample at a higher frequency the interval 0:Ts:h-Ts
+        % This tells us what should be the value of our state after
+        % sending the optimal commands if the model was perfect
         pos_i_sample = vec2mat(Phi_sample*x + A0_s.pos*X0(:,i),3)';
         vel_i_sample = vec2mat(Phi_vel_sample*x + A0_s.vel*X0(:,i),3)';
         
         % Sample the resulting reference Bezier curves at 1/h and 1/Ts
         cols = 2+(k-2)*(h/Ts):1+(k-1)*(h/Ts);
         for r = 1:d+1
-           rth_ref(:,:,r) = vec2mat(Der_h{r}*x,3)';
-           rth_ref_sample(:,:,r) = vec2mat(Der_ts{r}*x,3)';
-           X0_ref(:,r,i) = rth_ref_sample(:,end,r);
-           ref(:,k,r,i) = rth_ref(:,2,r);
-           ref_sample(:,cols,r,i) = rth_ref_sample(:,:,r);
+            rth_ref(:,:,r) = vec2mat(Der_h{r}*x,3)';
+            rth_ref_sample(:,:,r) = vec2mat(Der_ts{r}*x,3)';
+            X0_ref(:,r,i) = rth_ref_sample(:,end,r);
+            ref(:,k,r,i) = rth_ref(:,2,r);
+            ref_sample(:,cols,r,i) = rth_ref_sample(:,:,r);
         end
+        
+        % Simulate sending trajectories every Ts and applying at each time
+        % step noise to the measurements and propagating the state forward
+        X0_ex(:,1) = X0(:,i);
+        for k_ex = 2:length(t_sample_r) + 1
+            X0_ex(:, k_ex -1) = X0_ex(:, k_ex -1) + rnd_noise(std_p,std_v);
+            X0_ex(:,k_ex) = model_s.A*X0_ex(:, k_ex-1) + ...
+                            model_s.B*rth_ref_sample(:, k_ex-1, 1);
+        end
+        
         if ~disturbance || ~ismember(k,disturbance_k)
             % Initial conditions for next MPC cycle - based on sensing
-            X0(:,i) = [pos_i_sample(:,end)  + normrnd(0,std_p,3,1);
-                       vel_i_sample(:,end) + normrnd(0,std_v,3,1)];
-            prev_state(:,i) = [pos_i_sample(:,end-1)+normrnd(0,std_p,3,1);
-                               vel_i_sample(:,end-1)+normrnd(0,std_v,3,1)];
+            X0(:,i) = X0_ex(:, end);
 
             % Update agent's states at 1/h and 1/Ts frequencies
-            pos_k_i_sample(:,cols,i) = pos_i_sample;
-            vel_k_i_sample(:,cols,i) = vel_i_sample;
-            pos_k_i(:,k,i) = X0(1:3,i);
-            vel_k_i(:,k,i) = X0(4:6,i);
+            pos_k_i_sample(:,cols,i) = X0_ex(1:3, 2:end);
+            vel_k_i_sample(:,cols,i) = X0_ex(4:6, 2:end);
         elseif disturbance && ismember(k,disturbance_k)
             % APPLY SIMULATED DISTURBANCE
             X0(:,i) = [0.5*ones(3,1); 0.0*ones(3,1)];
             prev_state(:,i) = X0(:,i);
             pos_k_i_sample(:,cols,i) = repmat(X0(1:3,i),1,h/Ts);
             vel_k_i_sample(:,cols,i) = repmat(X0(4:6,i),1,h/Ts);
-        end 
-                    
+        end
+        
+        pred_X0(:,i) = [pos_i_sample(:,end); vel_i_sample(:,end)];
+        pos_k_i(:,k,i) = X0(1:3,i);
+        vel_k_i(:,k,i) = X0(4:6,i);            
         prev_input(:,i) = rth_ref_sample(:,end-1,1);
         
         % Reference and state prediction horizons - visualization purposes
@@ -324,8 +350,8 @@ figure(1)
 state = 1;
 grid on;
 hold on;
-plot(tk, pos_k_i(state,:,1),'Linewidth',1.5)
-plot(tk, ref(state,:,1,1),'--r','Linewidth',1.5)
+plot(t, pos_k_i_sample(state,:,1),'Linewidth',1.5)
+plot(t, ref_sample(state,:,1,1),'--r','Linewidth',1.5)
 ylabel([state_label{state} ' [m]'])
 xlabel ('t [s]')
 
@@ -334,8 +360,8 @@ state = 1;
 derivative = 2;
 grid on;
 hold on;
-plot(tk, vel_k_i(state,:,1),'Linewidth',1.5)
-plot(tk, ref(state,:,derivative,1),'--r','Linewidth',1.5)
+plot(t, vel_k_i_sample(state,:,1),'Linewidth',1.5)
+plot(t, ref_sample(state,:,derivative,1),'--r','Linewidth',1.5)
 ylabel([ der_label{derivative} state_label{state}  ' [m]'])
 xlabel ('t [s]')
 
@@ -363,7 +389,7 @@ state = 1;
 derivative = 3;
 grid on
 hold on;
-plot(tk, ref(state,:,derivative,1),'Linewidth',1.5)
+plot(t, ref_sample(state,:,derivative,1),'Linewidth',1.5)
 ylabel([ der_label{derivative} state_label{state}  ' [m]'])
 xlabel ('t [s]')
 

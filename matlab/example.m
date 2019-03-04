@@ -15,7 +15,7 @@ model_params.omega_z = 1/model_params.tau_z;
 % Disturbance applied to the model within a time frame
 disturbance = 1;
 agent_disturb = [1];
-disturbance_k = 1:21;
+disturbance_k = 40:60;
 
 % dimension of space - 3 = 3D, 2 = 2D
 ndim = 3; 
@@ -50,8 +50,8 @@ std_p = 0.00228682;
 std_v = 0.0109302;
 
 % Physical limits
-phys_limits.pmin = [-5,-5,0.2];
-phys_limits.pmax = [5,5,4.2];
+phys_limits.pmin = [-10,-10,0.2];
+phys_limits.pmax = [10,10,4.2];
 phys_limits.amax = 2;
 phys_limits.amin = -2;
 
@@ -62,14 +62,14 @@ rmin_init = 0.75;
 % [po,pf] = randomTest(N,pmin,pmax,rmin_init);
 
 % Initial positions
-po1 = [2.0,2.0,1.5];
+po1 = [-2.0,2.0,1.5];
 po2 = [-2.0,-2.01,1.5];
 po3 = [-2.0,2.0,1.5];
 po4 = [2.0,-2.0,1.5];
 po = cat(3,po1,po2,po3,po4);
 
 % Final positions
-pf1 = [-2.0,-2.0,1.5];
+pf1 = [2.0,2.0,1.5];
 pf2 = [2.0,2.0,1.5];
 pf3 = [2.0,-2.0,1.5];
 pf4 = [-2.0,2.0,1.5];
@@ -96,8 +96,8 @@ Alpha = mat_sum_sqrd_derivatives(d,T_segment,cr,l,ndim);
 H_snap = Beta'*Alpha*Beta;
 
 % For the goal tracking error cost function, define a weight matrix S
-s = 10;
-spd = 4;
+s = 50;
+spd = 3;
 S = s*[zeros(3*(k_hor-spd), 3*k_hor);
        zeros(3*spd, 3*(k_hor-spd)) eye(3*spd)];
 Phi = Lambda.pos*Gamma*Beta;
@@ -189,10 +189,11 @@ pred_X0 = X0;
 % Variables for reference replanning based on state feedback
 err_tol_pos = 0.05;  % tolerance between predicted and sensed state
 err_tol_vel = 0.5;
-reset_pos_val = 1.0;  % tolerance before resetting reference to state
+max_cost_value = 1;  % tolerance before resetting reference to state
 ki = 0.0;  % integral term
 integ_err(:,1) = zeros(3,1);
 integ_err_vel(:,1) = zeros(3,1);
+
 
 %% MAIN LOOP
 for k = 2:K
@@ -205,14 +206,18 @@ for k = 2:K
         err_pos_ref(:,k) = X0(1:3,i) - X0_ref(:,1,i);
         err_vel_ref(:,k) = X0(4:6,i) - X0_ref(:,2,i);
         
+        der_err_ref(:,k) = (err_pos_ref(:,k) - err_pos_ref(:,k-1))/h;
+        
+        cost(:,k) = (err_pos_ref(:,k).^5)./(-X0(4:6,i)+0.01);
+        
         % Integral term on position
         integ_err(:,k) = integ_err(:,k-1) + err_pos_ref(:,k)*h;
         
         for n = 1:ndim
             % Reset integral term if close to ref
-            if abs(err_pos_ref(n,k)) < 0.5
-                integ_err(n,k) = 0;
-            end
+%             if abs(err_pos_ref(n,k)) < 0.5
+%                 integ_err(n,k) = 0;
+%             end
             
             % Filter noise on position for feedback
             if abs(err_pos(n,k)) < err_tol_pos
@@ -221,9 +226,10 @@ for k = 2:K
         end
         
         % Reset reference to state if the error grows large
-        if any(abs(err_pos_ref(:,k)) > reset_pos_val*ones(3,1))
+        if any(abs(cost(:,k)) > max_cost_value*ones(3,1)) || any(cost(:,k) < -0.0005*ones(3,1))
             X0_ref(:,1,i) = X0(1:3,i);
-%             X0_ref(:,2,i) = X0(4:6,i);
+            X0_ref(:,2,i) = X0(4:6,i);
+            X0_ref(:,3:5,i) = zeros(3,3);
         else
             X0_ref(:,1,i) = X0_ref(:,1,i) + err_pos(:,k) + ki*integ_err(:,k);
         end
@@ -266,7 +272,6 @@ for k = 2:K
             ref(:,k,r,i) = rth_ref(:,2,r);
             ref_sample(:,cols,r,i) = rth_ref_sample(:,:,r);
         end
-        
         % Simulate sending trajectories every Ts and applying at each time
         % step noise to the measurements and propagating the state forward
         X0_ex(:,1) = X0(:,i);
@@ -285,7 +290,8 @@ for k = 2:K
             vel_k_i_sample(:,cols,i) = X0_ex(4:6, 2:end);
         elseif disturbance && ismember(k,disturbance_k)
             % APPLY SIMULATED DISTURBANCE
-            X0(:,i) = [X0(1:3,i); 0.0*ones(3,1)];
+            X0(1,i) = X0(1,i)-0.1;
+            X0(4,i) = -0.5;
             prev_state(:,i) = X0(:,i);
             pos_k_i_sample(:,cols,i) = repmat(X0(1:3,i),1,h/Ts);
             vel_k_i_sample(:,cols,i) = repmat(X0(4:6,i),1,h/Ts);
@@ -299,6 +305,9 @@ for k = 2:K
         % Reference and state prediction horizons - visualization purposes
         hor_ref(:,:,i,k) = rth_ref(:,:,1);
         hor_rob(:,:,i,k) = pos_i;
+%         figure(1)
+%         plot(hor_ref(1,:,i,k))
+%         
     end
     if isempty(x)
        break;
@@ -403,6 +412,33 @@ hold on;
 plot(t, ref_sample(state,:,derivative,1),'Linewidth',1.5)
 ylabel([ der_label{derivative} state_label{state}  ' [m]'])
 xlabel ('t [s]')
+
+figure(4)
+subplot(3,1,1)
+plot(tk, err_pos_ref(1,:),'Linewidth',1.5)
+grid on
+ylabel('Error [m]')
+xlabel ('tk [s]')
+
+subplot(3,1,2)
+plot(tk, der_err_ref(1,:),'Linewidth',1.5)
+grid on
+ylabel('Derivative of Error [m]')
+xlabel ('tk [s]')
+
+subplot(3,1,3)
+plot(tk, integ_err(1,:),'Linewidth',1.5)
+grid on
+ylabel('Integral of Error [m]')
+xlabel ('tk [s]')
+
+figure(5)
+plot(tk, cost(1,:),'Linewidth',1.5)
+grid on
+ylabel('Cost')
+xlabel ('tk [s]')
+
+
 
 % figure(5)
 % state = 1;

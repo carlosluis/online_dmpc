@@ -15,7 +15,7 @@ model_params.omega_z = 1/model_params.tau_z;
 % Disturbance applied to the model within a time frame
 disturbance = 1;
 agent_disturb = [1];
-disturbance_k = 30:80;
+disturbance_k = 1:21;
 
 % dimension of space - 3 = 3D, 2 = 2D
 ndim = 3; 
@@ -89,7 +89,7 @@ Gamma = mat_sample_poly(T_segment,0:h:((k_hor-1)*h),d,l);
 
 % Alpha - sum of squared derivatives of the position
 cr = zeros(1,d+1); % weights on degree of derivative deg = [0 1 ... d]
-cr(3) = .01;
+cr(3) = .008;
 Alpha = mat_sum_sqrd_derivatives(d,T_segment,cr,l,ndim);
 %% CONSTRUCT TERMS OF THE COST FUNCTION
 % The Hessian for the minimum snap cost function is
@@ -185,39 +185,49 @@ for i = 1:N
    hor_rob(:,:,i,1) = repmat(poi,1,k_hor);
 end
 pred_X0 = X0;
-% Admissible model error, helps filtering noise
-err_tol_pos = 0.1;
-err_tol_vel = 0.05;
+
+% Variables for reference replanning based on state feedback
+err_tol_pos = 0.05;  % tolerance between predicted and sensed state
+err_tol_vel = 0.5;
+reset_pos_val = 1.0;  % tolerance before resetting reference to state
+ki = 0.0;  % integral term
+integ_err(:,1) = zeros(3,1);
+integ_err_vel(:,1) = zeros(3,1);
 
 %% MAIN LOOP
 for k = 2:K
     for i = 1:N 
-        % Correct initial point of the reference based on state feedback
-%         p_ref = inv_model_s.A*prev_state(:,i) + inv_model_s.B*X0(4:6,i);
-%         err = p_ref - prev_input(:,i);
-%         if abs(err) < err_tol
-%             err = 0;
-%         else
-%             hola = 1;
-%         end
-%         X0_ref(:,1,i) = X0_ref(:,1,i) + 0.1*err;
-%         X0_ref(:,2,i) = X0(4:6);
-        % Compare the expected position vs the sensed position
-        err_pos = X0(1:3,i) - pred_X0(1:3,i);
-        err_vel = X0(4:6,i) - pred_X0(4:6,i);
+        % Compare the expected and sensed position at time k
+        err_pos(:,k) = X0(1:3,i) - pred_X0(1:3,i);
+        err_vel(:,k) = X0(4:6,i) - pred_X0(4:6,i);
         
-        % Adjust the reference based on this error
-        if abs(err_pos) < err_tol_pos
-            err_pos = 0;
+        % Compare the current position and the reference
+        err_pos_ref(:,k) = X0(1:3,i) - X0_ref(:,1,i);
+        err_vel_ref(:,k) = X0(4:6,i) - X0_ref(:,2,i);
+        
+        % Integral term on position
+        integ_err(:,k) = integ_err(:,k-1) + err_pos_ref(:,k)*h;
+        
+        for n = 1:ndim
+            % Reset integral term if close to ref
+            if abs(err_pos_ref(n,k)) < 0.5
+                integ_err(n,k) = 0;
+            end
+            
+            % Filter noise on position for feedback
+            if abs(err_pos(n,k)) < err_tol_pos
+                err_pos(n,k) = 0;
+            end
         end
         
-        if abs(err_vel) < err_tol_vel
-            err_vel = 0;
+        % Reset reference to state if the error grows large
+        if any(abs(err_pos_ref(:,k)) > reset_pos_val*ones(3,1))
+            X0_ref(:,1,i) = X0(1:3,i);
+%             X0_ref(:,2,i) = X0(4:6,i);
+        else
+            X0_ref(:,1,i) = X0_ref(:,1,i) + err_pos(:,k) + ki*integ_err(:,k);
         end
-        
-        X0_ref(:,1,i) = X0_ref(:,1,i) + 1.0*err_pos;
-        X0_ref(:,2,i) = X0_ref(:,2,i) + 0.8*err_vel;
-        
+              
         f_tot = f_pf(:,:,i);
 
         % Include hard on demand collision avoidance
@@ -247,11 +257,12 @@ for k = 2:K
         vel_i_sample = vec2mat(Phi_vel_sample*x + A0_s.vel*X0(:,i),3)';
         
         % Sample the resulting reference Bezier curves at 1/h and 1/Ts
+        % Get the next input to be applied 'X0_ref'
         cols = 2+(k-2)*(h/Ts):1+(k-1)*(h/Ts);
         for r = 1:d+1
             rth_ref(:,:,r) = vec2mat(Der_h{r}*x,3)';
             rth_ref_sample(:,:,r) = vec2mat(Der_ts{r}*x,3)';
-            X0_ref(:,r,i) = rth_ref_sample(:,end,r);
+            X0_ref(:,r,i) = rth_ref(:,2,r);
             ref(:,k,r,i) = rth_ref(:,2,r);
             ref_sample(:,cols,r,i) = rth_ref_sample(:,:,r);
         end
@@ -274,7 +285,7 @@ for k = 2:K
             vel_k_i_sample(:,cols,i) = X0_ex(4:6, 2:end);
         elseif disturbance && ismember(k,disturbance_k)
             % APPLY SIMULATED DISTURBANCE
-            X0(:,i) = [0.5*ones(3,1); 0.0*ones(3,1)];
+            X0(:,i) = [X0(1:3,i); 0.0*ones(3,1)];
             prev_state(:,i) = X0(:,i);
             pos_k_i_sample(:,cols,i) = repmat(X0(1:3,i),1,h/Ts);
             vel_k_i_sample(:,cols,i) = repmat(X0(4:6,i),1,h/Ts);

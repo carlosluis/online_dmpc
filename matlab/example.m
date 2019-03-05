@@ -2,7 +2,7 @@ clc
 clear all
 close all
 warning('off','all')
-visualize = 0;  % 3D visualization of trajectory and predictions
+visualize = 1;  % 3D visualization of trajectory and predictions
 
 % Define model parameters for the quad + controller system
 model_params.zeta_xy = 0.6502;
@@ -15,7 +15,7 @@ model_params.omega_z = 1/model_params.tau_z;
 % Disturbance applied to the model within a time frame
 disturbance = 1;
 agent_disturb = [1];
-disturbance_k = 40:60;
+disturbance_k = 10:25;
 
 % dimension of space - 3 = 3D, 2 = 2D
 ndim = 3; 
@@ -43,7 +43,7 @@ deg_poly = 3; % degree of differentiability required for the position
 l = 3;  % number of Bezier curves to concatenate
 d = 5;  % degree of the bezier curve
 
-N = 1; % number of vehicles
+N = 2; % number of vehicles
 
 % Noise standard deviation information based on Vicon data
 std_p = 0.00228682;
@@ -62,14 +62,14 @@ rmin_init = 0.75;
 % [po,pf] = randomTest(N,pmin,pmax,rmin_init);
 
 % Initial positions
-po1 = [-2.0,2.0,1.5];
+po1 = [2.0,1.0,1.5];
 po2 = [-2.0,-2.01,1.5];
 po3 = [-2.0,2.0,1.5];
 po4 = [2.0,-2.0,1.5];
 po = cat(3,po1,po2,po3,po4);
 
 % Final positions
-pf1 = [2.0,2.0,1.5];
+pf1 = [-2.0,2.0,1.5];
 pf2 = [2.0,2.0,1.5];
 pf3 = [2.0,-2.0,1.5];
 pf4 = [-2.0,2.0,1.5];
@@ -170,7 +170,7 @@ Phi_vel_sample = Lambda_s.vel*Tau_r*Beta;
 %% INIT ALGORITHM
 for i = 1:N
    poi = po(:,:,i)';
-   voi = zeros(3,1);
+   voi = 0.001*ones(3,1);
    X0(:,i) = [poi; voi];
    pos_k_i(:,1,i) = poi;
    pos_k_i_sample(:,1,i) = poi;
@@ -189,7 +189,8 @@ pred_X0 = X0;
 % Variables for reference replanning based on state feedback
 err_tol_pos = 0.05;  % tolerance between predicted and sensed state
 err_tol_vel = 0.5;
-max_cost_value = 1;  % tolerance before resetting reference to state
+max_cost = 0.8*ones(3,1);  % tolerance before resetting reference to state
+min_cost = -0.0005*ones(3,1);
 ki = 0.0;  % integral term
 integ_err(:,1) = zeros(3,1);
 integ_err_vel(:,1) = zeros(3,1);
@@ -208,17 +209,13 @@ for k = 2:K
         
         der_err_ref(:,k) = (err_pos_ref(:,k) - err_pos_ref(:,k-1))/h;
         
-        cost(:,k) = (err_pos_ref(:,k).^5)./(-X0(4:6,i)+0.01);
+        
+        cost(:,k) = (err_pos_ref(:,k).^5)./(-X0(4:6,i)+sign(X0(4:6,i))*0.01);
         
         % Integral term on position
         integ_err(:,k) = integ_err(:,k-1) + err_pos_ref(:,k)*h;
         
         for n = 1:ndim
-            % Reset integral term if close to ref
-%             if abs(err_pos_ref(n,k)) < 0.5
-%                 integ_err(n,k) = 0;
-%             end
-            
             % Filter noise on position for feedback
             if abs(err_pos(n,k)) < err_tol_pos
                 err_pos(n,k) = 0;
@@ -226,7 +223,7 @@ for k = 2:K
         end
         
         % Reset reference to state if the error grows large
-        if any(abs(cost(:,k)) > max_cost_value*ones(3,1)) || any(cost(:,k) < -0.0005*ones(3,1))
+        if any(cost(:,k) > max_cost) || any(cost(:,k) < min_cost)
             X0_ref(:,1,i) = X0(1:3,i);
             X0_ref(:,2,i) = X0(4:6,i);
             X0_ref(:,3:5,i) = zeros(3,3);
@@ -281,17 +278,18 @@ for k = 2:K
                             model_s.B*rth_ref_sample(:, k_ex-1, 1);
         end
         
-        if ~disturbance || ~ismember(k,disturbance_k)
+        if ~disturbance || ~ismember(k,disturbance_k) || ~ismember(i,agent_disturb)
             % Initial conditions for next MPC cycle - based on sensing
             X0(:,i) = X0_ex(:, end);
 
             % Update agent's states at 1/h and 1/Ts frequencies
             pos_k_i_sample(:,cols,i) = X0_ex(1:3, 2:end);
             vel_k_i_sample(:,cols,i) = X0_ex(4:6, 2:end);
-        elseif disturbance && ismember(k,disturbance_k)
+        elseif disturbance && ismember(k,disturbance_k) && ismember(i,agent_disturb)
             % APPLY SIMULATED DISTURBANCE
-            X0(1,i) = X0(1,i)-0.1;
-            X0(4,i) = -0.5;
+            X0(1,i) = X0(1,i);
+            X0(4,i) = 0;
+            X0(:,i) = X0(:,i) + rnd_noise(std_p,std_v);
             prev_state(:,i) = X0(:,i);
             pos_k_i_sample(:,cols,i) = repmat(X0(1:3,i),1,h/Ts);
             vel_k_i_sample(:,cols,i) = repmat(X0(4:6,i),1,h/Ts);
@@ -304,10 +302,7 @@ for k = 2:K
         
         % Reference and state prediction horizons - visualization purposes
         hor_ref(:,:,i,k) = rth_ref(:,:,1);
-        hor_rob(:,:,i,k) = pos_i;
-%         figure(1)
-%         plot(hor_ref(1,:,i,k))
-%         
+        hor_rob(:,:,i,k) = pos_i;         
     end
     if isempty(x)
        break;
@@ -325,23 +320,25 @@ if visualize
         end
         for k = 1:K
             for i = 1:N
+                if k ~= 1
+                    delete(h_pos(i))
+                end
                 clearpoints(h_line(i));
-                addpoints(h_line(i),hor_rob(1,:,i,k),hor_rob(2,:,i,k),hor_rob(3,:,i,k));     
+                addpoints(h_line(i),hor_rob(1,:,i,k),hor_rob(2,:,i,k),hor_rob(3,:,i,k));
                 hold on;
                 grid on;
                 xlim([phys_limits.pmin(1), phys_limits.pmax(1)])
                 ylim([phys_limits.pmin(2), phys_limits.pmax(2)])
                 zlim([0,phys_limits.pmax(3)])
-                plot3(pos_k_i(1,k,i),pos_k_i(2,k,i),pos_k_i(3,k,i),'o',...
+                h_pos(i) = plot3(pos_k_i(1,k,i),pos_k_i(2,k,i),pos_k_i(3,k,i),'o',...
                     'LineWidth',2,'Color',colors(i,:));
                 plot3(po(1,1,i), po(1,2,i), po(1,3,i),'^',...
                       'LineWidth',2,'Color',colors(i,:));
                 plot3(pf(1,1,i), pf(1,2,i), pf(1,3,i),'x',...
-                      'LineWidth',2,'Color',colors(i,:));    
+                      'LineWidth',2,'Color',colors(i,:));   
             end
         drawnow
         end
-        clf
         pause(0.5)
     end
 end

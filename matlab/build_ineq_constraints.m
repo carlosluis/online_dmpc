@@ -29,7 +29,7 @@ b_in_acc = [phys_limits.amax*ones(3*length(t_sample_acc),1);
            -phys_limits.amin*ones(3*length(t_sample_acc),1)];
 
 % POSITION REFERENCE CONSTRAINT - WORKSPACE BOUNDARIES
-t_sample_pos_ref = h:(2*h):((K-1)*h);
+t_sample_pos_ref = h:(4*h):((K-1)*h);
 Tau_pos_ref = mat_sample_poly(T_segment,t_sample_pos_ref,d,l);
 
 % Now we compose the constraint in (A,b) form to pass to the solver

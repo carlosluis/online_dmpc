@@ -1,4 +1,4 @@
-function [A_coll, b_coll, k_ctr] = ondemand_softconstraints(hor_rob,Phi,X0,A0,i,...
+function [A_coll, b_coll, k_ctr] = nocomm_softconstraints(hor_rob,Phi,X0,A0,i,...
                                                  rmin,order,E1,E2)
 A_coll = [];
 b_coll = [];
@@ -18,9 +18,7 @@ for k = 1:K
         A_coll = [A_coll diag(dist);
                   zeros(N_v, ncols) eye(N_v);
                   zeros(N_v, ncols) -eye(N_v)];
-%         if k_ctr <=6
-%             relax_lim = 0.1;
-%         end
+
         b_coll = [b_coll; zeros(N_v,1); relax_lim*ones(N_v,1)];
         return
     end

@@ -3,6 +3,7 @@ clear all
 close all
 warning('off','all')
 visualize = 1;  % 3D visualization of trajectory and predictions
+no_comm = 0;
 
 % Define model parameters for the quad + controller system
 model_params.zeta_xy = 0.6502;
@@ -15,7 +16,7 @@ model_params.omega_z = 1/model_params.tau_z;
 % Disturbance applied to the model within a time frame
 disturbance = 1;
 agent_disturb = [1];
-disturbance_k = 10:50;
+disturbance_k = 1:50;
 
 % dimension of space - 3 = 3D, 2 = 2D
 ndim = 3; 
@@ -43,15 +44,15 @@ deg_poly = 3; % degree of differentiability required for the position
 l = 3;  % number of Bezier curves to concatenate
 d = 5;  % degree of the bezier curve
 
-N = 4; % number of vehicles
+N = 2; % number of vehicles
 
 % Noise standard deviation information based on Vicon data
 std_p = 0.00228682;
 std_v = 0.0109302;
 
 % Physical limits
-phys_limits.pmin = [-2.5,-2.5,0.2];
-phys_limits.pmax = [2.5,2.5,2.2];
+phys_limits.pmin = [-1.5,-1.5,0.2];
+phys_limits.pmax = [1.5,1.5,2.2];
 phys_limits.amax = 2;
 phys_limits.amin = -2;
 
@@ -62,17 +63,17 @@ rmin_init = 0.75;
 % [po,pf] = randomTest(N,pmin,pmax,rmin_init);
 
 % Initial positions
-po1 = [2.0, 2.0,1.5];
-po2 = [-2.0,-2.0,1.5];
-po3 = [-2.0,2.0,1.5];
-po4 = [2.0,-2.0,1.5];
+po1 = [1.0, 1.0,1.0];
+po2 = [-1.0,-1.0,1.0];
+po3 = [-1.0,1.0,1.0];
+po4 = [1.0,-1.0,1.0];
 po = cat(3,po1,po2,po3,po4);
 
 % Final positions
-pf1 = [-2.0,-2.0,1.5];
-pf2 = [2.0,2.0,1.5];
-pf3 = [2.0,-2.0,1.5];
-pf4 = [-2.0,2.0,1.5];
+pf1 = [-1.0,-1.0,1.0];
+pf2 = [1.0,1.0,1.0];
+pf3 = [1.0,-1.0,1.0];
+pf4 = [-1.0,1.0,1.0];
 pf  = cat(3,pf1,pf2,pf3,pf4);
 
 %% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES
@@ -182,7 +183,7 @@ for i = 1:N
       ref_sample(:,1,r,i) = X0_ref(:,r,i);
    end
    hor_ref(:,:,i,1) = repmat(poi,1,k_hor);
-   hor_rob(:,:,i,1) = repmat(poi,1,k_hor);
+   hor_rob(:,:,i,1) = repmat(poi,1,k_hor+1);
 end
 pred_X0 = X0;
 
@@ -190,7 +191,7 @@ pred_X0 = X0;
 err_tol_pos = 0.05;  % tolerance between predicted and sensed state
 err_tol_vel = 0.5;
 max_cost = 0.8*ones(3,1);  % tolerance before resetting reference to state
-min_cost = -0.0005*ones(3,1);
+min_cost = -0.005*ones(3,1);
 ki = 0.0;  % integral term
 integ_err(:,1) = zeros(3,1);
 integ_err_vel(:,1) = zeros(3,1);
@@ -210,7 +211,7 @@ for k = 2:K
         der_err_ref(:,k) = (err_pos_ref(:,k) - err_pos_ref(:,k-1))/h;
         
         
-        cost(:,k) = (err_pos_ref(:,k).^5)./(-X0(4:6,i)+sign(X0(4:6,i))*0.01);
+        cost(:,k,i) = (err_pos_ref(:,k).^5)./(-X0(4:6,i)+sign(X0(4:6,i))*0.01);
         
         % Integral term on position
         integ_err(:,k) = integ_err(:,k-1) + err_pos_ref(:,k)*h;
@@ -222,11 +223,13 @@ for k = 2:K
             end
         end
         
+        trigger(k,i) = 0;
         % Reset reference to state if the error grows large
-        if any(cost(:,k) > max_cost) || any(cost(:,k) < min_cost)
+        if any(cost(:,k,i) > max_cost) || any(cost(:,k,i) < min_cost)
             X0_ref(:,1,i) = X0(1:3,i);
             X0_ref(:,2,i) = X0(4:6,i);
             X0_ref(:,3:5,i) = zeros(3,3);
+            trigger(k,i) = 1;
         else
             X0_ref(:,1,i) = X0_ref(:,1,i) + err_pos(:,k) + ki*integ_err(:,k);
         end
@@ -234,9 +237,22 @@ for k = 2:K
         f_tot = f_pf(:,:,i);
 
         % Include hard on demand collision avoidance
-        [A_coll, b_coll] = ondemand_softconstraints(hor_rob(:,:,:,k-1),Phi,...
-                                                X0(:,i),A0.pos,i,rmin,...
-                                                order,E1,E2);
+        if no_comm
+            for n = 1:N
+                if i~=n
+                    hor_rob_i(:,:,n) = repmat(X0(1:3,n),1,k_hor+1);
+                else
+                    hor_rob_i(:,:,n) = hor_rob(:,:,i,k-1);
+                end
+            end 
+            [A_coll, b_coll, k_ctr] = nocomm_softconstraints(hor_rob_i(:,2:end,:),Phi,...
+                                                    X0(:,i),A0.pos,i,rmin,...
+                                                    order,E1,E2);
+        else
+            [A_coll, b_coll, k_ctr] = ondemand_softconstraints(hor_rob(:,2:end,:,k-1),Phi,...
+                                                    X0(:,i),A0.pos,i,rmin,...
+                                                    order,E1,E2);
+        end
         A_in_i = A_in;
         b_in_i = b_in;
         A_eq_i = A_eq;
@@ -250,8 +266,12 @@ for k = 2:K
             A_eq_i = [A_eq zeros(size(A_eq,1), N_v)];
             
             % Costs
-            H_eps = 1*10^0*eye(N_v);
-            f_eps = -5*10^4*ones(1,N_v);
+            if false %k_ctr <=2
+                f_eps = -5*10^8*ones(1,N_v);
+            else
+                f_eps = -1*10^2*ones(1,N_v);
+            end
+            H_eps = 0*10^4*eye(N_v);
             H_i = [H zeros(size(H,1), N_v);
                    zeros(N_v,size(H,2)) H_eps];
         end
@@ -262,6 +282,11 @@ for k = 2:K
         if isempty(x)
             fprintf("ERROR: No solution - exitflag %i\n",exitflag)
             break;
+        end
+        
+        if ~isempty(b_coll)
+%             fprintf("Relaxed contraint by %.2f cm\n",abs(x(end))*100)
+            hols =2;
         end
         
         % Extract the control points
@@ -287,6 +312,7 @@ for k = 2:K
             ref(:,k,r,i) = rth_ref(:,2,r);
             ref_sample(:,cols,r,i) = rth_ref_sample(:,:,r);
         end
+        
         % Simulate sending trajectories every Ts and applying at each time
         % step noise to the measurements and propagating the state forward
         X0_ex(:,1) = X0(:,i);
@@ -320,8 +346,15 @@ for k = 2:K
         
         % Reference and state prediction horizons - visualization purposes
         hor_ref(:,:,i,k) = rth_ref(:,:,1);
-        hor_rob(:,:,i,k) = pos_i;         
+        hor_rob_k(:,:,i) = [X0(1:3,i) pos_i];
+%         if true %i == 1 %trigger(k,i)
+%             hor_rob_k(:,:,i) = [X0(1:3,i) repmat(X0(1:3,i),1,k_hor)];
+%         else
+%             hor_rob_k(:,:,i) = [X0(1:3,i) pos_i];
+%         end
+                 
     end
+    hor_rob(:,:,:,k) = hor_rob_k;
     if isempty(x)
        break;
     end
@@ -372,6 +405,7 @@ for i = 1:N
     grid on;
     hold on;
     plot(t, pos_k_i_sample(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
+    plot(t, ref_sample(state,:,1,i),'--','Linewidth',1.5, 'Color', colors(i,:))
     plot(t,phys_limits.pmin(state)*ones(length(t),1),'--r','LineWidth',1.5);
     plot(t,phys_limits.pmax(state)*ones(length(t),1),'--r','LineWidth',1.5);
     ylabel([state_label{state} ' [m]'])
@@ -382,6 +416,7 @@ for i = 1:N
     grid on;
     hold on;
     plot(t, pos_k_i_sample(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
+    plot(t, ref_sample(state,:,1,i),'--','Linewidth',1.5, 'Color', colors(i,:))
     plot(t,phys_limits.pmin(state)*ones(length(t),1),'--r','LineWidth',1.5);
     plot(t,phys_limits.pmax(state)*ones(length(t),1),'--r','LineWidth',1.5);
     ylabel([state_label{state} ' [m]'])
@@ -392,6 +427,7 @@ for i = 1:N
     grid on;
     hold on;
     plot(t, pos_k_i_sample(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
+    plot(t, ref_sample(state,:,1,i),'--','Linewidth',1.5, 'Color', colors(i,:))
     plot(t,phys_limits.pmin(state)*ones(length(t),1),'--r','LineWidth',1.5);
     plot(t,phys_limits.pmax(state)*ones(length(t),1),'--r','LineWidth',1.5);
     ylabel([state_label{state} ' [m]'])
@@ -451,6 +487,31 @@ for i = 1:N
     plot(t,phys_limits.amin*ones(length(t),1),'--r','LineWidth',1.5);
     plot(t,phys_limits.amax*ones(length(t),1),'--r','LineWidth',1.5);
     ylabel(['a' state_label{state} ' [m/s^2]'])
+    xlabel ('t [s]')
+    
+    figure(4)
+    subplot(3,1,1)
+    state = 1;
+    grid on;
+    hold on;
+    plot(tk, cost(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
+    ylabel(['Cost in ' state_label{state}])
+    xlabel ('t [s]')
+    
+    subplot(3,1,2)
+    state = 2;
+    grid on;
+    hold on;
+    plot(tk, cost(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
+    ylabel(['Cost in ' state_label{state}])
+    xlabel ('t [s]')
+    
+    subplot(3,1,3)
+    state = 3;
+    grid on;
+    hold on;
+    plot(tk, cost(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
+    ylabel(['Cost in ' state_label{state}])
     xlabel ('t [s]')
 end
 

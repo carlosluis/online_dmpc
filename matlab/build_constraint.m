@@ -6,7 +6,7 @@ K = size(A0,1)/3;
 N_coll = sum(neighbours);
 Ain_k = zeros(N_coll, size(Phi,2));
 bin_k = zeros(N_coll,1);
-k_ctr = k-1;
+k_ctr = k;
 p_i = hor_k(:,i);
 idx = 1;
 if k_ctr == 0

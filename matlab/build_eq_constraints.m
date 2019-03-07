@@ -2,7 +2,7 @@ function A_eq =  build_eq_constraints(d,l,ndim,deg_poly,T_ctrl_pts)
 
 % From the control points of each derivative of the Bezier curve, we must
 % select the first point and the overlapping points between segments
-D = zeros(l, 3*(d+1));
+D = zeros(l, l*(d+1));
 for k = 1:l
     if k==1
        D(1,1) = 1; 

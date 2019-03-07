@@ -13,6 +13,10 @@ if k_ctr == 0
     k_ctr = 1;
 end
 
+if k_ctr == K+1
+    k_ctr = K;
+end
+
 for j = 1:N
    if (i~= j && neighbours(j))
        p_j = hor_k(:,j);

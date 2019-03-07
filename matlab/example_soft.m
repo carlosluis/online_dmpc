@@ -3,6 +3,8 @@ clear all
 close all
 warning('off','all')
 visualize = 1;  % 3D visualization of trajectory and predictions
+view_states = 0;
+view_distance = 1;
 no_comm = 0;
 
 % Define model parameters for the quad + controller system
@@ -44,7 +46,7 @@ deg_poly = 3; % degree of differentiability required for the position
 l = 3;  % number of Bezier curves to concatenate
 d = 5;  % degree of the bezier curve
 
-N = 2; % number of vehicles
+N = 4; % number of vehicles
 
 % Noise standard deviation information based on Vicon data
 std_p = 0.00228682;
@@ -63,15 +65,15 @@ rmin_init = 0.75;
 % [po,pf] = randomTest(N,pmin,pmax,rmin_init);
 
 % Initial positions
-po1 = [1.0, 1.0,1.0];
-po2 = [-1.0,-1.0,1.0];
+po1 = [0.0, 0.0,1.0];
+po2 = [-1.0,0.0,1.0];
 po3 = [-1.0,1.0,1.0];
 po4 = [1.0,-1.0,1.0];
 po = cat(3,po1,po2,po3,po4);
 
 % Final positions
-pf1 = [-1.0,-1.0,1.0];
-pf2 = [1.0,1.0,1.0];
+pf1 = [-1.0,0.0,1.0];
+pf2 = [1.0,0.0,1.0];
 pf3 = [1.0,-1.0,1.0];
 pf4 = [-1.0,1.0,1.0];
 pf  = cat(3,pf1,pf2,pf3,pf4);
@@ -101,23 +103,32 @@ s = 50;
 spd = 3;
 S = s*[zeros(3*(k_hor-spd), 3*k_hor);
        zeros(3*spd, 3*(k_hor-spd)) eye(3*spd)];
+s = 50;
+spd = 1;
+S_slow = s*[zeros(3*(k_hor-spd), 3*k_hor);
+       zeros(3*spd, 3*(k_hor-spd)) eye(3*spd)];
 Phi = Lambda.pos*Gamma*Beta;
 Phi_vel = Lambda.vel*Gamma*Beta;
 H_err = Phi'*S*Phi;
+H_err_slow = Phi'*S_slow*Phi;
 
 % The complete Hessian is simply the sum of the two
 H = H_err + H_snap;
+H_slow = H_err_slow + H_snap;
 
 % The linear term of the cost function depends both on the goal location of
 % agent i and on its current position and velocity
 % We can construct the static part that depends on the desired location
 for i = 1:N
     f_pf(:,:,i) = repmat((pf(:,:,i))',k_hor,1)'*S*Phi;
+    f_pf_slow(:,:,i) = repmat((pf(:,:,i))',k_hor,1)'*S_slow*Phi;
 end
 
+Rho = S*Phi;
 % We can also construct the matrix that will then be multiplied by the
 % initial condition -> X0'*A0'*S*Lambda*Gamma*Beta
 mat_f_x0 = A0.pos'*S*Lambda.pos*Gamma*Beta;
+mat_f_x0_slow = A0.pos'*S_slow*Lambda.pos*Gamma*Beta;
 %% CONSTRUCT INEQUALITY CONSTRAINT MATRICES
 % Types of constraints: 1) Acceleration limits 2) workspace boundaries
 % We need to create the matrices that map position control points into c-th
@@ -177,7 +188,6 @@ for i = 1:N
    pos_k_i_sample(:,1,i) = poi;
    X0_ref(:,:,i) = [poi, voi, zeros(3,1) zeros(3,1) zeros(3,1)];
    prev_state(:,i) = X0(:,i);
-   prev_input(:,i) = X0_ref(:,1,i);
    for r = 1:deg_poly+1
       ref(:,1,r,i) = X0_ref(:,r,i); 
       ref_sample(:,1,r,i) = X0_ref(:,r,i);
@@ -191,12 +201,12 @@ pred_X0 = X0;
 err_tol_pos = 0.05;  % tolerance between predicted and sensed state
 err_tol_vel = 0.5;
 max_cost = 0.8*ones(3,1);  % tolerance before resetting reference to state
-min_cost = -0.005*ones(3,1);
+min_cost = -0.01*ones(3,1);
 ki = 0.0;  % integral term
 integ_err(:,1) = zeros(3,1);
 integ_err_vel(:,1) = zeros(3,1);
 
-
+tic
 %% MAIN LOOP
 for k = 2:K
     for i = 1:N 
@@ -234,30 +244,17 @@ for k = 2:K
             X0_ref(:,1,i) = X0_ref(:,1,i) + err_pos(:,k) + ki*integ_err(:,k);
         end
               
-        f_tot = f_pf(:,:,i);
-
-        % Include hard on demand collision avoidance
-        if no_comm
-            for n = 1:N
-                if i~=n
-                    hor_rob_i(:,:,n) = repmat(X0(1:3,n),1,k_hor+1);
-                else
-                    hor_rob_i(:,:,n) = hor_rob(:,:,i,k-1);
-                end
-            end 
-            [A_coll, b_coll, k_ctr] = nocomm_softconstraints(hor_rob_i(:,2:end,:),Phi,...
+        % Include on-demand collision avoidance
+        [A_coll, b_coll, k_ctr] = ondemand_softconstraints(hor_rob(:,1:end,:,k-1),Phi,...
                                                     X0(:,i),A0.pos,i,rmin,...
                                                     order,E1,E2);
-        else
-            [A_coll, b_coll, k_ctr] = ondemand_softconstraints(hor_rob(:,2:end,:,k-1),Phi,...
-                                                    X0(:,i),A0.pos,i,rmin,...
-                                                    order,E1,E2);
-        end
         A_in_i = A_in;
         b_in_i = b_in;
         A_eq_i = A_eq;
         H_i = H;
         f_eps = [];
+        mat_f_x0_i = mat_f_x0;
+        f_tot = f_pf(:,:,i);
         if ~isempty(b_coll) % collisions in the horizon, augment system
             % Constraints
             N_v = length(b_coll)/3;
@@ -266,26 +263,28 @@ for k = 2:K
             A_eq_i = [A_eq zeros(size(A_eq,1), N_v)];
             
             % Costs
-            if false %k_ctr <=2
-                f_eps = -5*10^8*ones(1,N_v);
+            if true %k_ctr <=5
+                f_eps = -1*10^3*ones(1,N_v);
             else
                 f_eps = -1*10^2*ones(1,N_v);
             end
-            H_eps = 0*10^4*eye(N_v);
-            H_i = [H zeros(size(H,1), N_v);
+            H_eps = 1*10^0*eye(N_v);
+            H_i = [H_slow zeros(size(H,1), N_v);
                    zeros(N_v,size(H,2)) H_eps];
+            mat_f_x0_i = mat_f_x0_slow;
+            f_tot = f_pf_slow(:,:,i);
         end
         
         % Solve QP
         [x,exitflag] = softMPC_update(l,deg_poly, A_in_i, b_in_i, A_eq_i, H_i,...
-                                      mat_f_x0,f_tot,f_eps, X0(:,i), X0_ref(:,:,i));
+                                      mat_f_x0_i,f_tot,f_eps, X0(:,i), X0_ref(:,:,i));
         if isempty(x)
             fprintf("ERROR: No solution - exitflag %i\n",exitflag)
             break;
         end
         
         if ~isempty(b_coll)
-%             fprintf("Relaxed contraint by %.2f cm\n",abs(x(end))*100)
+%             fprintf("Relaxed contraint by %.2f cm\n",x(end)*100)
             hols =2;
         end
         
@@ -342,23 +341,164 @@ for k = 2:K
         pred_X0(:,i) = [pos_i_sample(:,end); vel_i_sample(:,end)];
         pos_k_i(:,k,i) = X0(1:3,i);
         vel_k_i(:,k,i) = X0(4:6,i);            
-        prev_input(:,i) = rth_ref_sample(:,end-1,1);
         
         % Reference and state prediction horizons - visualization purposes
         hor_ref(:,:,i,k) = rth_ref(:,:,1);
         hor_rob_k(:,:,i) = [X0(1:3,i) pos_i];
-%         if true %i == 1 %trigger(k,i)
-%             hor_rob_k(:,:,i) = [X0(1:3,i) repmat(X0(1:3,i),1,k_hor)];
-%         else
-%             hor_rob_k(:,:,i) = [X0(1:3,i) pos_i];
-%         end
-                 
+        if i==0
+            hor_rob_k(:,:,i) = [X0(1:3,i) repmat(X0(1:3,i),1,k_hor)];
+        else
+            hor_rob_k(:,:,i) = [X0(1:3,i) pos_i];
+        end
     end
     hor_rob(:,:,:,k) = hor_rob_k;
     if isempty(x)
        break;
     end
 end
+toc
+%% PLOT STATES AND REFERENCE TRAJECTORIES
+state_label = {'x', 'y', 'z'};
+der_label = {'p', 'v', 'a', 'j', 's'};
+colors = distinguishable_colors(N);
+if view_states
+    for i = 1:N
+        figure(1)
+        subplot(3,1,1)
+        state = 1;
+        grid on;
+        hold on;
+        plot(t, pos_k_i_sample(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
+        plot(t, ref_sample(state,:,1,i),'--','Linewidth',1.5, 'Color', colors(i,:))
+        plot(t,phys_limits.pmin(state)*ones(length(t),1),'--r','LineWidth',1.5);
+        plot(t,phys_limits.pmax(state)*ones(length(t),1),'--r','LineWidth',1.5);
+        ylabel([state_label{state} ' [m]'])
+        xlabel ('t [s]')
+
+        subplot(3,1,2)
+        state = 2;
+        grid on;
+        hold on;
+        plot(t, pos_k_i_sample(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
+        plot(t, ref_sample(state,:,1,i),'--','Linewidth',1.5, 'Color', colors(i,:))
+        plot(t,phys_limits.pmin(state)*ones(length(t),1),'--r','LineWidth',1.5);
+        plot(t,phys_limits.pmax(state)*ones(length(t),1),'--r','LineWidth',1.5);
+        ylabel([state_label{state} ' [m]'])
+        xlabel ('t [s]')
+
+        subplot(3,1,3)
+        state = 3;
+        grid on;
+        hold on;
+        plot(t, pos_k_i_sample(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
+        plot(t, ref_sample(state,:,1,i),'--','Linewidth',1.5, 'Color', colors(i,:))
+        plot(t,phys_limits.pmin(state)*ones(length(t),1),'--r','LineWidth',1.5);
+        plot(t,phys_limits.pmax(state)*ones(length(t),1),'--r','LineWidth',1.5);
+        ylabel([state_label{state} ' [m]'])
+        xlabel ('t [s]')
+
+        figure(2)
+        subplot(3,1,1)
+        state = 1;
+        grid on;
+        hold on;
+        plot(t, vel_k_i_sample(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
+        ylabel(['v' state_label{state} ' [m/s]'])
+        xlabel ('t [s]')
+
+        subplot(3,1,2)
+        state = 2;
+        grid on;
+        hold on;
+        plot(t, vel_k_i_sample(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
+        ylabel(['v' state_label{state} ' [m/s]'])
+        xlabel ('t [s]')
+
+        subplot(3,1,3)
+        state = 3;
+        grid on;
+        hold on;
+        plot(t, vel_k_i_sample(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
+        ylabel(['v' state_label{state} ' [m/s]'])
+        xlabel ('t [s]')
+
+        figure(3)
+        subplot(3,1,1)
+        state = 1;
+        grid on;
+        hold on;
+        plot(t, ref_sample(state,:,3,i),'Linewidth',1.5, 'Color', colors(i,:))
+        plot(t,phys_limits.amin*ones(length(t),1),'--r','LineWidth',1.5);
+        plot(t,phys_limits.amax*ones(length(t),1),'--r','LineWidth',1.5);
+        ylabel(['a' state_label{state} ' [m/s^2]'])
+        xlabel ('t [s]')
+
+        subplot(3,1,2)
+        state = 2;
+        grid on;
+        hold on;
+        plot(t, ref_sample(state,:,3,i),'Linewidth',1.5, 'Color', colors(i,:))
+        plot(t,phys_limits.amin*ones(length(t),1),'--r','LineWidth',1.5);
+        plot(t,phys_limits.amax*ones(length(t),1),'--r','LineWidth',1.5);
+        ylabel(['a' state_label{state} ' [m/s^2]'])
+        xlabel ('t [s]')
+
+        subplot(3,1,3)
+        state = 3;
+        grid on;
+        hold on;
+        plot(t, ref_sample(state,:,3,i),'Linewidth',1.5, 'Color', colors(i,:))
+        plot(t,phys_limits.amin*ones(length(t),1),'--r','LineWidth',1.5);
+        plot(t,phys_limits.amax*ones(length(t),1),'--r','LineWidth',1.5);
+        ylabel(['a' state_label{state} ' [m/s^2]'])
+        xlabel ('t [s]')
+
+        figure(4)
+        subplot(3,1,1)
+        state = 1;
+        grid on;
+        hold on;
+        plot(tk, cost(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
+        ylabel(['Cost in ' state_label{state}])
+        xlabel ('t [s]')
+
+        subplot(3,1,2)
+        state = 2;
+        grid on;
+        hold on;
+        plot(tk, cost(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
+        ylabel(['Cost in ' state_label{state}])
+        xlabel ('t [s]')
+
+        subplot(3,1,3)
+        state = 3;
+        grid on;
+        hold on;
+        plot(tk, cost(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
+        ylabel(['Cost in ' state_label{state}])
+        xlabel ('t [s]')
+    end
+end
+
+%% PLOT INTER-AGENT DISTANCES OVER TIME
+figure(6)
+if view_distance
+    for i = 1:N
+        for j = 1:N
+            if(i~=j)
+                differ = E1*(pos_k_i_sample(:,:,i) - pos_k_i_sample(:,:,j));
+                dist = (sum(differ.^order,1)).^(1/order);
+                plot(t, dist, 'LineWidth',1.5);
+                grid on;
+                hold on;
+                xlabel('t [s]')
+                ylabel('Inter-agent distance [m]');
+            end
+        end
+    end
+    plot(t,rmin*ones(length(t),1),'--r','LineWidth',1.5);
+end
+
 %% 3D VISUALIZATION
 if visualize
     figure(1)
@@ -391,143 +531,6 @@ if visualize
         drawnow
         end
         pause(0.5)
+        clf
     end
 end
-
-%% PLOT STATES AND REFERENCE TRAJECTORIES
-state_label = {'x', 'y', 'z'};
-der_label = {'p', 'v', 'a', 'j', 's'};
-colors = distinguishable_colors(N);
-for i = 1:N
-    figure(1)
-    subplot(3,1,1)
-    state = 1;
-    grid on;
-    hold on;
-    plot(t, pos_k_i_sample(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
-    plot(t, ref_sample(state,:,1,i),'--','Linewidth',1.5, 'Color', colors(i,:))
-    plot(t,phys_limits.pmin(state)*ones(length(t),1),'--r','LineWidth',1.5);
-    plot(t,phys_limits.pmax(state)*ones(length(t),1),'--r','LineWidth',1.5);
-    ylabel([state_label{state} ' [m]'])
-    xlabel ('t [s]')
-    
-    subplot(3,1,2)
-    state = 2;
-    grid on;
-    hold on;
-    plot(t, pos_k_i_sample(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
-    plot(t, ref_sample(state,:,1,i),'--','Linewidth',1.5, 'Color', colors(i,:))
-    plot(t,phys_limits.pmin(state)*ones(length(t),1),'--r','LineWidth',1.5);
-    plot(t,phys_limits.pmax(state)*ones(length(t),1),'--r','LineWidth',1.5);
-    ylabel([state_label{state} ' [m]'])
-    xlabel ('t [s]')
-    
-    subplot(3,1,3)
-    state = 3;
-    grid on;
-    hold on;
-    plot(t, pos_k_i_sample(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
-    plot(t, ref_sample(state,:,1,i),'--','Linewidth',1.5, 'Color', colors(i,:))
-    plot(t,phys_limits.pmin(state)*ones(length(t),1),'--r','LineWidth',1.5);
-    plot(t,phys_limits.pmax(state)*ones(length(t),1),'--r','LineWidth',1.5);
-    ylabel([state_label{state} ' [m]'])
-    xlabel ('t [s]')
-    
-    figure(2)
-    subplot(3,1,1)
-    state = 1;
-    grid on;
-    hold on;
-    plot(t, vel_k_i_sample(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
-    ylabel(['v' state_label{state} ' [m/s]'])
-    xlabel ('t [s]')
-    
-    subplot(3,1,2)
-    state = 2;
-    grid on;
-    hold on;
-    plot(t, vel_k_i_sample(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
-    ylabel(['v' state_label{state} ' [m/s]'])
-    xlabel ('t [s]')
-    
-    subplot(3,1,3)
-    state = 3;
-    grid on;
-    hold on;
-    plot(t, vel_k_i_sample(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
-    ylabel(['v' state_label{state} ' [m/s]'])
-    xlabel ('t [s]')
-    
-    figure(3)
-    subplot(3,1,1)
-    state = 1;
-    grid on;
-    hold on;
-    plot(t, ref_sample(state,:,3,i),'Linewidth',1.5, 'Color', colors(i,:))
-    plot(t,phys_limits.amin*ones(length(t),1),'--r','LineWidth',1.5);
-    plot(t,phys_limits.amax*ones(length(t),1),'--r','LineWidth',1.5);
-    ylabel(['a' state_label{state} ' [m/s^2]'])
-    xlabel ('t [s]')
-    
-    subplot(3,1,2)
-    state = 2;
-    grid on;
-    hold on;
-    plot(t, ref_sample(state,:,3,i),'Linewidth',1.5, 'Color', colors(i,:))
-    plot(t,phys_limits.amin*ones(length(t),1),'--r','LineWidth',1.5);
-    plot(t,phys_limits.amax*ones(length(t),1),'--r','LineWidth',1.5);
-    ylabel(['a' state_label{state} ' [m/s^2]'])
-    xlabel ('t [s]')
-    
-    subplot(3,1,3)
-    state = 3;
-    grid on;
-    hold on;
-    plot(t, ref_sample(state,:,3,i),'Linewidth',1.5, 'Color', colors(i,:))
-    plot(t,phys_limits.amin*ones(length(t),1),'--r','LineWidth',1.5);
-    plot(t,phys_limits.amax*ones(length(t),1),'--r','LineWidth',1.5);
-    ylabel(['a' state_label{state} ' [m/s^2]'])
-    xlabel ('t [s]')
-    
-    figure(4)
-    subplot(3,1,1)
-    state = 1;
-    grid on;
-    hold on;
-    plot(tk, cost(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
-    ylabel(['Cost in ' state_label{state}])
-    xlabel ('t [s]')
-    
-    subplot(3,1,2)
-    state = 2;
-    grid on;
-    hold on;
-    plot(tk, cost(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
-    ylabel(['Cost in ' state_label{state}])
-    xlabel ('t [s]')
-    
-    subplot(3,1,3)
-    state = 3;
-    grid on;
-    hold on;
-    plot(tk, cost(state,:,i),'Linewidth',1.5, 'Color', colors(i,:))
-    ylabel(['Cost in ' state_label{state}])
-    xlabel ('t [s]')
-end
-
-%% PLOT INTER-AGENT DISTANCES OVER TIME
-figure(6)
-for i = 1:N
-    for j = 1:N
-        if(i~=j)
-            differ = E1*(pos_k_i_sample(:,:,i) - pos_k_i_sample(:,:,j));
-            dist = (sum(differ.^order,1)).^(1/order);
-            plot(t, dist, 'LineWidth',1.5);
-            grid on;
-            hold on;
-            xlabel('t [s]')
-            ylabel('Inter-agent distance [m]');
-        end
-    end
-end
-plot(t,rmin*ones(length(t),1),'--r','LineWidth',1.5);

@@ -3,7 +3,7 @@ function [A_coll, b_coll, k_ctr] = ondemand_softconstraints(hor_rob,Phi,X0,A0,i,
 A_coll = [];
 b_coll = [];
 K = size(hor_rob,2);
-relax_lim = 100;
+relax_lim = 10;
 k_ctr = 0;
 % Detect first collision on the horizon and return constraint tuple
 for k = 1:K
@@ -15,6 +15,7 @@ for k = 1:K
         [A_coll,b_coll, dist] = build_constraint(hor_k,k,neighbrs,X0,Phi,...
                                                  A0,i,rmin,order,E1,E2);
         ncols = size(A_coll,2);
+%         fprintf("k_ctr = %i with dist = %.2f m\n", k_ctr, dist)
         A_coll = [A_coll diag(dist);
                   zeros(N_v, ncols) eye(N_v);
                   zeros(N_v, ncols) -eye(N_v)];

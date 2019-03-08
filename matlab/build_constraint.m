@@ -7,22 +7,24 @@ N_coll = sum(neighbours);
 Ain_k = zeros(N_coll, size(Phi,2));
 bin_k = zeros(N_coll,1);
 k_ctr = k;
-p_i = hor_k(:,i);
+p_i = X0(1:3);
 idx = 1;
-if k_ctr == 0
-    k_ctr = 1;
-end
+% if k_ctr == 1
+%     k_ctr = 2;
+% end
 
-if k_ctr == K+1
-    k_ctr = K;
-end
+% if k_ctr == K+1
+%     k_ctr = K;
+% end
 
 for j = 1:N
    if (i~= j && neighbours(j))
        p_j = hor_k(:,j);
        dist = norm(E1*(p_i-p_j),order);
        differ = (E2*(p_i-p_j).^(order-1))'; % Transpose of the difference
-       
+%        if dist < rmin
+%            rmin = dist-0.05;
+%        end
        prev_dist(idx) = dist^(order-1);
        
        % Build intermediate terms for matrices

@@ -2,7 +2,7 @@ clc
 clear all
 close all
 warning('off','all')
-visualize = 1;  % 3D visualization of trajectory and predictions
+visualize = 0;  % 3D visualization of trajectory and predictions
 view_states = 0;
 view_distance = 1;
 no_comm = 0;
@@ -18,7 +18,7 @@ model_params.omega_z = 1/model_params.tau_z;
 % Disturbance applied to the model within a time frame
 disturbance = 1;
 agent_disturb = [1];
-disturbance_k = 1:50;
+disturbance_k = 1:80;
 
 % dimension of space - 3 = 3D, 2 = 2D
 ndim = 3; 
@@ -46,7 +46,7 @@ deg_poly = 3; % degree of differentiability required for the position
 l = 3;  % number of Bezier curves to concatenate
 d = 5;  % degree of the bezier curve
 
-N = 4; % number of vehicles
+N = 2; % number of vehicles
 
 % Noise standard deviation information based on Vicon data
 std_p = 0.00228682;
@@ -65,7 +65,7 @@ rmin_init = 0.75;
 % [po,pf] = randomTest(N,pmin,pmax,rmin_init);
 
 % Initial positions
-po1 = [0.0, 0.0,1.0];
+po1 = [1.0, 0.0,1.0];
 po2 = [-1.0,0.0,1.0];
 po3 = [-1.0,1.0,1.0];
 po4 = [1.0,-1.0,1.0];
@@ -103,18 +103,26 @@ s = 50;
 spd = 3;
 S = s*[zeros(3*(k_hor-spd), 3*k_hor);
        zeros(3*spd, 3*(k_hor-spd)) eye(3*spd)];
-s = 50;
+s = .5;
 spd = 1;
 S_slow = s*[zeros(3*(k_hor-spd), 3*k_hor);
        zeros(3*spd, 3*(k_hor-spd)) eye(3*spd)];
+   
+s = 500;
+spd = 3;
+S_esc = s*[eye(3*spd) zeros(3*spd, 3*(k_hor-spd));
+        zeros(3*(k_hor-spd), 3*k_hor)];
+   
 Phi = Lambda.pos*Gamma*Beta;
 Phi_vel = Lambda.vel*Gamma*Beta;
 H_err = Phi'*S*Phi;
 H_err_slow = Phi'*S_slow*Phi;
+H_err_esc = Phi'*S_esc*Phi;
 
 % The complete Hessian is simply the sum of the two
 H = H_err + H_snap;
 H_slow = H_err_slow + H_snap;
+H_esc = H_err_esc + H_snap;
 
 % The linear term of the cost function depends both on the goal location of
 % agent i and on its current position and velocity
@@ -125,10 +133,12 @@ for i = 1:N
 end
 
 Rho = S*Phi;
+Rho_esc = S_esc*Phi;
 % We can also construct the matrix that will then be multiplied by the
 % initial condition -> X0'*A0'*S*Lambda*Gamma*Beta
 mat_f_x0 = A0.pos'*S*Lambda.pos*Gamma*Beta;
 mat_f_x0_slow = A0.pos'*S_slow*Lambda.pos*Gamma*Beta;
+mat_f_x0_esc = A0.pos'*S_esc*Lambda.pos*Gamma*Beta;
 %% CONSTRUCT INEQUALITY CONSTRAINT MATRICES
 % Types of constraints: 1) Acceleration limits 2) workspace boundaries
 % We need to create the matrices that map position control points into c-th
@@ -245,7 +255,7 @@ for k = 2:K
         end
               
         % Include on-demand collision avoidance
-        [A_coll, b_coll, k_ctr] = ondemand_softconstraints(hor_rob(:,1:end,:,k-1),Phi,...
+        [A_coll, b_coll, k_ctr, pf_tmp] = ondemand_softconstraints(hor_rob(:,2:end,:,k-1),Phi,...
                                                     X0(:,i),A0.pos,i,rmin,...
                                                     order,E1,E2);
         A_in_i = A_in;
@@ -269,10 +279,17 @@ for k = 2:K
                 f_eps = -1*10^2*ones(1,N_v);
             end
             H_eps = 1*10^0*eye(N_v);
-            H_i = [H_slow zeros(size(H,1), N_v);
-                   zeros(N_v,size(H,2)) H_eps];
-            mat_f_x0_i = mat_f_x0_slow;
-            f_tot = f_pf_slow(:,:,i);
+            if ~isempty(pf_tmp)
+                H_i = [H_esc zeros(size(H,1), N_v);
+                       zeros(N_v,size(H,2)) H_eps];
+                mat_f_x0_i = mat_f_x0_esc;
+                f_tot = repmat((pf_tmp),k_hor,1)'*Rho_esc;
+            else
+                H_i = [H_slow zeros(size(H,1), N_v);
+                       zeros(N_v,size(H,2)) H_eps];
+                mat_f_x0_i = mat_f_x0_slow;
+                f_tot = f_pf_slow(:,:,i);
+            end
         end
         
         % Solve QP

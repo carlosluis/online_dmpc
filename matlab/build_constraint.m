@@ -28,9 +28,9 @@ for j = 1:N
 %        end
        prev_dist(idx) = dist^(order-1);
        
-       if k_ctr == 1 && dist < rmin
+       if k_ctr <=1
            % We're almost crashing!!
-           pf_tmp = p_i + (p_i-p_j)*(rmin + 0.2 -dist)/dist;
+           pf_tmp = p_i + (p_i-p_j)*(rmin+0.05 -dist)/dist;
            hola = 1; 
        end
        

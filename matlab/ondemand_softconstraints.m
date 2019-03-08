@@ -16,7 +16,7 @@ for k = 1:K
         [A_coll,b_coll, dist,pf_tmp] = build_constraint(hor_k,k,neighbrs,X0,Phi,...
                                                  A0,i,rmin,order,E1,E2);
         ncols = size(A_coll,2);
-%         fprintf("k_ctr = %i with dist = %.2f m\n", k_ctr, dist)
+        fprintf("k_ctr = %i with dist = %.2f m\n", k_ctr, dist)
         A_coll = [A_coll diag(dist);
                   zeros(N_v, ncols) eye(N_v);
                   zeros(N_v, ncols) -eye(N_v)];

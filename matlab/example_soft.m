@@ -2,7 +2,7 @@ clc
 clear all
 close all
 warning('off','all')
-visualize = 0;  % 3D visualization of trajectory and predictions
+visualize = 1;  % 3D visualization of trajectory and predictions
 view_states = 0;
 view_distance = 1;
 no_comm = 0;
@@ -16,9 +16,9 @@ model_params.tau_z = 0.3;
 model_params.omega_z = 1/model_params.tau_z;
 
 % Disturbance applied to the model within a time frame
-disturbance = 1;
+disturbance = 0;
 agent_disturb = [1];
-disturbance_k = 1:80;
+disturbance_k = 1:50;
 
 % dimension of space - 3 = 3D, 2 = 2D
 ndim = 3; 
@@ -30,7 +30,7 @@ tk = 0:h:T;
 K = T/h + 1; % number of time steps
 Ts = 0.01; % period for interpolation @ 100Hz
 t = 0:Ts:T; % interpolated time vector
-k_hor = 16; % horizon length
+k_hor = 11; % horizon length
 T_segment = 1.0; % fixed time length of each Bezier segment
 
 % Variables for ellipsoid constraint
@@ -43,7 +43,7 @@ E2 = E^(-order);
 
 % Bezier curve parameters. Note that d > deg_poly always
 deg_poly = 3; % degree of differentiability required for the position
-l = 3;  % number of Bezier curves to concatenate
+l = 2;  % number of Bezier curves to concatenate
 d = 5;  % degree of the bezier curve
 
 N = 2; % number of vehicles
@@ -65,7 +65,7 @@ rmin_init = 0.75;
 % [po,pf] = randomTest(N,pmin,pmax,rmin_init);
 
 % Initial positions
-po1 = [1.0, 0.0,1.0];
+po1 = [-0.8, 0.0,1.0];
 po2 = [-1.0,0.0,1.0];
 po3 = [-1.0,1.0,1.0];
 po4 = [1.0,-1.0,1.0];
@@ -103,13 +103,13 @@ s = 50;
 spd = 3;
 S = s*[zeros(3*(k_hor-spd), 3*k_hor);
        zeros(3*spd, 3*(k_hor-spd)) eye(3*spd)];
-s = .5;
+s = 50;
 spd = 1;
 S_slow = s*[zeros(3*(k_hor-spd), 3*k_hor);
        zeros(3*spd, 3*(k_hor-spd)) eye(3*spd)];
    
-s = 500;
-spd = 3;
+s = 1000;
+spd = k_hor;
 S_esc = s*[eye(3*spd) zeros(3*spd, 3*(k_hor-spd));
         zeros(3*(k_hor-spd), 3*k_hor)];
    
@@ -203,7 +203,7 @@ for i = 1:N
       ref_sample(:,1,r,i) = X0_ref(:,r,i);
    end
    hor_ref(:,:,i,1) = repmat(poi,1,k_hor);
-   hor_rob(:,:,i,1) = repmat(poi,1,k_hor+1);
+   hor_rob(:,:,i,1) = repmat(poi,1,k_hor);
 end
 pred_X0 = X0;
 
@@ -255,7 +255,7 @@ for k = 2:K
         end
               
         % Include on-demand collision avoidance
-        [A_coll, b_coll, k_ctr, pf_tmp] = ondemand_softconstraints(hor_rob(:,2:end,:,k-1),Phi,...
+        [A_coll, b_coll, k_ctr, pf_tmp] = ondemand_softconstraints(hor_rob(:,1:end,:,k-1),Phi,...
                                                     X0(:,i),A0.pos,i,rmin,...
                                                     order,E1,E2);
         A_in_i = A_in;
@@ -274,7 +274,7 @@ for k = 2:K
             
             % Costs
             if true %k_ctr <=5
-                f_eps = -1*10^3*ones(1,N_v);
+                f_eps = -1*10^4*ones(1,N_v);
             else
                 f_eps = -1*10^2*ones(1,N_v);
             end
@@ -361,11 +361,11 @@ for k = 2:K
         
         % Reference and state prediction horizons - visualization purposes
         hor_ref(:,:,i,k) = rth_ref(:,:,1);
-        hor_rob_k(:,:,i) = [X0(1:3,i) pos_i];
+        hor_rob_k(:,:,i) = [X0(1:3,i) pos_i(:,2:end)];
         if i==0
             hor_rob_k(:,:,i) = [X0(1:3,i) repmat(X0(1:3,i),1,k_hor)];
         else
-            hor_rob_k(:,:,i) = [X0(1:3,i) pos_i];
+            hor_rob_k(:,:,i) = [X0(1:3,i) pos_i(:,2:end)];
         end
     end
     hor_rob(:,:,:,k) = hor_rob_k;
@@ -498,14 +498,14 @@ if view_states
 end
 
 %% PLOT INTER-AGENT DISTANCES OVER TIME
-figure(6)
 if view_distance
+    figure(6)
     for i = 1:N
         for j = 1:N
             if(i~=j)
-                differ = E1*(pos_k_i_sample(:,:,i) - pos_k_i_sample(:,:,j));
+                differ = E1*(pos_k_i(:,:,i) - pos_k_i(:,:,j));
                 dist = (sum(differ.^order,1)).^(1/order);
-                plot(t, dist, 'LineWidth',1.5);
+                plot(tk, dist, 'LineWidth',1.5);
                 grid on;
                 hold on;
                 xlabel('t [s]')
@@ -513,7 +513,7 @@ if view_distance
             end
         end
     end
-    plot(t,rmin*ones(length(t),1),'--r','LineWidth',1.5);
+    plot(tk,rmin*ones(length(tk),1),'--r','LineWidth',1.5);
 end
 
 %% 3D VISUALIZATION

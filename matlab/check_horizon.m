@@ -6,7 +6,7 @@ neighbours = zeros(N,1);
 for j = 1:N %Iterate through the number of obstacles (other agents)
     if(i~=j)
         dist = norm(E1*(hor_k(:,i)-hor_k(:,j)),order);
-        collisions(j) = (dist < rmin+0.05);
-        neighbours(j) = dist < rmin*(3);
+        collisions(j) = (dist < rmin);
+        neighbours(j) = dist < rmin;
     end  
 end

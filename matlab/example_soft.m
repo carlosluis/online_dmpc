@@ -30,7 +30,7 @@ tk = 0:h:T;
 K = T/h + 1; % number of time steps
 Ts = 0.01; % period for interpolation @ 100Hz
 t = 0:Ts:T; % interpolated time vector
-k_hor = 11; % horizon length
+k_hor = 16; % horizon length
 T_segment = 1.0; % fixed time length of each Bezier segment
 
 % Variables for ellipsoid constraint
@@ -43,14 +43,14 @@ E2 = E^(-order);
 
 % Bezier curve parameters. Note that d > deg_poly always
 deg_poly = 3; % degree of differentiability required for the position
-l = 2;  % number of Bezier curves to concatenate
+l = 3;  % number of Bezier curves to concatenate
 d = 5;  % degree of the bezier curve
 
-N = 2; % number of vehicles
+N = 20; % number of vehicles
 
 % Noise standard deviation information based on Vicon data
-std_p = 0.00228682;
-std_v = 0.0109302;
+std_p = 1*0.00228682;
+std_v = 1*0.0109302;
 
 % Physical limits
 phys_limits.pmin = [-1.5,-1.5,0.2];
@@ -62,21 +62,21 @@ phys_limits.amin = -2;
 rmin_init = 0.75;
 
 % Initial positions
-% [po,pf] = randomTest(N,pmin,pmax,rmin_init);
+[po,pf] = randomTest(N,phys_limits.pmin,phys_limits.pmax,rmin+0.2,E1,order);
 
 % Initial positions
-po1 = [-0.8, 0.0,1.0];
-po2 = [-1.0,0.0,1.0];
-po3 = [-1.0,1.0,1.0];
-po4 = [1.0,-1.0,1.0];
-po = cat(3,po1,po2,po3,po4);
-
-% Final positions
-pf1 = [-1.0,0.0,1.0];
-pf2 = [1.0,0.0,1.0];
-pf3 = [1.0,-1.0,1.0];
-pf4 = [-1.0,1.0,1.0];
-pf  = cat(3,pf1,pf2,pf3,pf4);
+% po1 = [1.01, 1.0,1.0];
+% po2 = [-1.0,-1.0,1.0];
+% po3 = [-1.0,1.0,1.0];
+% po4 = [1.0,-1.0,1.0];
+% po = cat(3,po1,po2,po3,po4);
+% 
+% % Final positions
+% pf1 = [-1.0,-1.0,1.0];
+% pf2 = [1.0,1.0,1.0];
+% pf3 = [1.0,-1.0,1.0];
+% pf4 = [-1.0,1.0,1.0];
+% pf  = cat(3,pf1,pf2,pf3,pf4);
 
 %% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES
 [model, inv_model] = get_model(h, model_params);
@@ -99,11 +99,11 @@ Alpha = mat_sum_sqrd_derivatives(d,T_segment,cr,l,ndim);
 H_snap = Beta'*Alpha*Beta;
 
 % For the goal tracking error cost function, define a weight matrix S
-s = 50;
+s = 100;
 spd = 3;
 S = s*[zeros(3*(k_hor-spd), 3*k_hor);
        zeros(3*spd, 3*(k_hor-spd)) eye(3*spd)];
-s = 50;
+s = 100;
 spd = 1;
 S_slow = s*[zeros(3*(k_hor-spd), 3*k_hor);
        zeros(3*spd, 3*(k_hor-spd)) eye(3*spd)];
@@ -203,7 +203,7 @@ for i = 1:N
       ref_sample(:,1,r,i) = X0_ref(:,r,i);
    end
    hor_ref(:,:,i,1) = repmat(poi,1,k_hor);
-   hor_rob(:,:,i,1) = repmat(poi,1,k_hor);
+   hor_rob(:,:,i,1) = repmat(poi,1,k_hor+1);
 end
 pred_X0 = X0;
 
@@ -255,7 +255,7 @@ for k = 2:K
         end
               
         % Include on-demand collision avoidance
-        [A_coll, b_coll, k_ctr, pf_tmp] = ondemand_softconstraints(hor_rob(:,1:end,:,k-1),Phi,...
+        [A_coll, b_coll, k_ctr, pf_tmp] = ondemand_softconstraints(hor_rob(:,2:end,:,k-1),Phi,...
                                                     X0(:,i),A0.pos,i,rmin,...
                                                     order,E1,E2);
         A_in_i = A_in;
@@ -273,13 +273,10 @@ for k = 2:K
             A_eq_i = [A_eq zeros(size(A_eq,1), N_v)];
             
             % Costs
-            if true %k_ctr <=5
-                f_eps = -1*10^4*ones(1,N_v);
-            else
-                f_eps = -1*10^2*ones(1,N_v);
-            end
-            H_eps = 1*10^0*eye(N_v);
+            f_eps = -1*10^4*ones(1,N_v);
+            H_eps = 0*10^5*eye(N_v);
             if ~isempty(pf_tmp)
+                f_eps = -1*10^0*ones(1,N_v);
                 H_i = [H_esc zeros(size(H,1), N_v);
                        zeros(N_v,size(H,2)) H_eps];
                 mat_f_x0_i = mat_f_x0_esc;
@@ -361,11 +358,11 @@ for k = 2:K
         
         % Reference and state prediction horizons - visualization purposes
         hor_ref(:,:,i,k) = rth_ref(:,:,1);
-        hor_rob_k(:,:,i) = [X0(1:3,i) pos_i(:,2:end)];
+        hor_rob_k(:,:,i) = [X0(1:3,i) pos_i(:,1:end)];
         if i==0
             hor_rob_k(:,:,i) = [X0(1:3,i) repmat(X0(1:3,i),1,k_hor)];
         else
-            hor_rob_k(:,:,i) = [X0(1:3,i) pos_i(:,2:end)];
+            hor_rob_k(:,:,i) = [X0(1:3,i) pos_i(:,1:end)];
         end
     end
     hor_rob(:,:,:,k) = hor_rob_k;

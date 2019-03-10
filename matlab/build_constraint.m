@@ -6,7 +6,7 @@ K = size(A0,1)/3;
 N_coll = sum(neighbours);
 Ain_k = zeros(N_coll, size(Phi,2));
 bin_k = zeros(N_coll,1);
-k_ctr = k;
+k_ctr = k-1;
 p_i = X0(1:3);
 idx = 1;
 pf_tmp = [];
@@ -28,10 +28,10 @@ for j = 1:N
 %        end
        prev_dist(idx) = dist^(order-1);
        
-       if k_ctr <=1
+       if k_ctr <=1 && dist < rmin-0.05
            % We're almost crashing!!
-           pf_tmp = p_i + (p_i-p_j)*(rmin+0.05 -dist)/dist;
-           hola = 1; 
+%            pf_tmp = p_i + (p_i-p_j)*(rmin+0.05 -dist)/dist;
+%            hola = 1; 
        end
        
        % Build intermediate terms for matrices

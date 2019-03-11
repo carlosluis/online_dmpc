@@ -1,9 +1,9 @@
 function T_ctrl_pts = cell_derivate_ctrl_pts(d)
 der_mats{d} = [];
 for c = d:-1:1
-    aux = zeros(c,c+1);
+    aux = zeros(c, c + 1);
     for l = 1:c
-       aux(l,l:l+1) = [-c c]; 
+       aux(l, l:l + 1) = [-c, c]; 
     end
     der_mats{c} = aux;
 end

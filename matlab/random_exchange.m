@@ -1,4 +1,4 @@
-function [po,pf] = randomExchange(N,pmin,pmax,rmin)
+function [po, pf] = random_exchange(N, pmin, pmax, rmin)
 max_iter = 200000;
 %Generate initial points
 
@@ -52,5 +52,5 @@ for n = 1:N
     pf(:,n) = po(:,perm(n));
 end
 
-po = reshape(po,1,3,N);
-pf = reshape(pf,1,3,N);
+po = reshape(po, 1, 3, N);
+pf = reshape(pf, 1, 3, N);

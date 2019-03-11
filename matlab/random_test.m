@@ -1,4 +1,4 @@
-function [po,pf] = randomTest(N,pmin,pmax,rmin,E1,order)
+function [po, pf] = random_test(N, pmin, pmax, rmin, E1, order)
 max_iter = 200000;
 %Generate initial points
 
@@ -13,7 +13,7 @@ while(~pass)
         while(~pass && tries <= max_iter)
             candidate = (pmin + (pmax-pmin).*rand(1,3))';
             diff = E1*(po - candidate);
-            dist = (sum(diff.^order,1)).^(1/order);
+            dist = (sum(diff.^order,1)).^(1 / order);
 
             if(dist > rmin)
                 po(:,n) = candidate;
@@ -26,7 +26,7 @@ while(~pass)
         end
     end
 end
-po = reshape(po,1,3,N);
+po = reshape(po, 1, 3, N);
 
 %Generate final points
 
@@ -54,4 +54,4 @@ while(~pass)
         end
     end
 end
-pf = reshape(pf,1,3,N);
+pf = reshape(pf, 1, 3, N);

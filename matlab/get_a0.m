@@ -1,4 +1,4 @@
-function A0 = get_a0(A,K)
+function A0 = get_a0(A, K)
 Ak = eye(6);
 A0.pos = [];
 A0.vel = [];

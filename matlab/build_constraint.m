@@ -29,8 +29,8 @@ for j = 1:N
        prev_dist(idx) = dist^(order-1);
        
        if k_ctr <=1 && dist < rmin-0.05
-           % We're almost crashing!!
-%            pf_tmp = p_i + (p_i-p_j)*(rmin+0.05 -dist)/dist;
+           % We're almost crashing, force agents to repel each other
+           pf_tmp = p_i + (p_i-p_j)*(rmin+0.1 -dist)/dist;
 %            hola = 1; 
        end
        

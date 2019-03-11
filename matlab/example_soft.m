@@ -16,7 +16,7 @@ model_params.tau_z = 0.3;
 model_params.omega_z = 1/model_params.tau_z;
 
 % Disturbance applied to the model within a time frame
-disturbance = 0;
+disturbance = 1;
 agent_disturb = [1];
 disturbance_k = 1:50;
 
@@ -35,8 +35,8 @@ T_segment = 1.0; % fixed time length of each Bezier segment
 
 % Variables for ellipsoid constraint
 order = 2; % choose between 2 or 4 for the order of the super ellipsoid
-rmin = 0.5; % X-Y protection radius for collisions
-c = 1.5; % make this one for spherical constraint
+rmin = 0.35; % X-Y protection radius for collisions
+c = 2.0; % make this one for spherical constraint
 E = diag([1,1,c]);
 E1 = E^(-1);
 E2 = E^(-order);
@@ -46,7 +46,7 @@ deg_poly = 3; % degree of differentiability required for the position
 l = 3;  % number of Bezier curves to concatenate
 d = 5;  % degree of the bezier curve
 
-N = 20; % number of vehicles
+N = 2; % number of vehicles
 
 % Noise standard deviation information based on Vicon data
 std_p = 1*0.00228682;
@@ -62,21 +62,21 @@ phys_limits.amin = -2;
 rmin_init = 0.75;
 
 % Initial positions
-[po,pf] = randomTest(N,phys_limits.pmin,phys_limits.pmax,rmin+0.2,E1,order);
+% [po,pf] = randomTest(N,phys_limits.pmin,phys_limits.pmax,rmin+0.2,E1,order);
 
 % Initial positions
-% po1 = [1.01, 1.0,1.0];
-% po2 = [-1.0,-1.0,1.0];
-% po3 = [-1.0,1.0,1.0];
-% po4 = [1.0,-1.0,1.0];
-% po = cat(3,po1,po2,po3,po4);
-% 
-% % Final positions
-% pf1 = [-1.0,-1.0,1.0];
-% pf2 = [1.0,1.0,1.0];
-% pf3 = [1.0,-1.0,1.0];
-% pf4 = [-1.0,1.0,1.0];
-% pf  = cat(3,pf1,pf2,pf3,pf4);
+po1 = [1.0, 1.0,1.0];
+po2 = [-1.0,-1.0,1.0];
+po3 = [-1.0,1.0,1.0];
+po4 = [1.0,-1.0,1.0];
+po = cat(3,po1,po2,po3,po4);
+
+% Final positions
+pf1 = [-1.0,-1.0,1.0];
+pf2 = [1.0,1.0,1.0];
+pf3 = [1.0,-1.0,1.0];
+pf4 = [-1.0,1.0,1.0];
+pf  = cat(3,pf1,pf2,pf3,pf4);
 
 %% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES
 [model, inv_model] = get_model(h, model_params);

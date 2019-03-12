@@ -1,2 +1,6 @@
 
 *.m~
+
+cpp/bin/
+
+cpp/build/

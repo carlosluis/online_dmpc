@@ -238,7 +238,7 @@ for k = 2:K
             f_eps = lin_coll_penalty*ones(1, N_v);
             H_eps = quad_coll_penalty*eye(N_v);
             
-            % If close to colliding, change setpoint to quicly react
+            % If close to colliding, change setpoint to quickly react
             if ~isempty(pf_tmp)
                 H_i = [H_r zeros(size(H_f,1), N_v);
                        zeros(N_v, size(H_f,2)) H_eps];

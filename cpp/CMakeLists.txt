@@ -11,14 +11,14 @@ set( CMAKE_EXPORT_COMPILE_COMMANDS ON )
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 find_package(Eigen3 REQUIRED)
 include_directories(
-	include
+	${PROJECT_SOURCE_DIR}/include
 	${EIGEN3_INCLUDE_DIR}
 )
 
+message("-- Eigen library directory: ${EIGEN3_INCLUDE_DIR}")
 message("-- Source path: ${PROJECT_SOURCE_DIR}")
 
-add_executable(
-	run
+add_executable(run
 	src/main.cpp
 )
 

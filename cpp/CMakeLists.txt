@@ -1,14 +1,31 @@
 cmake_minimum_required(VERSION 3.0)
 
+project(online_planning)
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
-set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set( CMAKE_EXPORT_COMPILE_COMMANDS ON )
 
-project(online_planning)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
+find_package(Eigen3 REQUIRED)
+include_directories(
+	include
+	${EIGEN3_INCLUDE_DIR}
+)
+
+message("-- Source path: ${PROJECT_SOURCE_DIR}")
 
 add_executable(
 	run
-	main.cpp
+	src/main.cpp
 )
+
+add_library(bezier
+	src/bezier.cpp)
+
+target_link_libraries(run
+	bezier
+)
+

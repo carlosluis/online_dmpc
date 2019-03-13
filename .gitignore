@@ -4,3 +4,13 @@
 cpp/bin/
 
 cpp/build/
+
+*.swp
+
+cpp/\.idea/
+
+cpp/cmake-build-debug/
+
+cpp/cmake-build-release/
+
+cpp/lib/

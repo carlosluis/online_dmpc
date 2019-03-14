@@ -14,4 +14,3 @@ for i = 1:nrows
        aug_array(n*(i-1) + k, :) = circshift(aug_array(n*(i-1) + k, :), k-1); 
     end
 end 
-hola = 1;

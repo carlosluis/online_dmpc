@@ -40,7 +40,7 @@ N = 20;
 % pf4 = [-1.0,1.0,1.0];
 % pf  = cat(3,pf1,pf2,pf3,pf4);
 
-%%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 
 [model, inv_model] = get_model(h, model_params);
 Lambda = get_lambda(model.A, model.B, k_hor);

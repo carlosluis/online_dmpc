@@ -13,27 +13,30 @@ public:
 	BezierCurve(int deg, int l, int dim);
 	~BezierCurve(){};
 
-	// Public methods
-    void set_ctrl_pts(Eigen::VectorXd x);
-
     // Public variables
     Eigen::MatrixXd T_pts_poly;
 
-    Eigen::MatrixXd bernstein_to_power(int deg);
-    void set_input_samples(float segment_duration, Eigen::VectorXd t_samples);
-    Eigen::MatrixXd get_mat_sample_poly(float segment_duration, Eigen::VectorXd t_samples,
-                                        int deg);
+	// Public methods
+    void set_ctrl_pts(Eigen::VectorXd x);
 
-    Eigen::VectorXd get_sample(float t);
+    Eigen::MatrixXd get_mat_input_sampling(float segment_duration, Eigen::VectorXd t_samples);
+
+    Eigen::VectorXd get_input_sequence(Eigen::VectorXd x);
+
+    Eigen::MatrixXd get_mat_energy_cost(float segment_duration, Eigen::VectorXd weights);
 
 private:
     // Methods
-
+    Eigen::MatrixXd bernstein_to_power(int deg);
     Eigen::MatrixXd increase_matrix_dim(Eigen::MatrixXd matrix, int dim);
 
-    Eigen::MatrixXd build_sample_mat_poly(std::vector<Eigen::MatrixXd> Tau,
-                                          int num_samples, int deg);
+    Eigen::MatrixXd get_mat_sumsqrd_der(float T, Eigen::VectorXd weights);
 
+    Eigen::MatrixXd get_mat_sample_poly(float segment_duration, Eigen::VectorXd t_samples,
+                                        int deg);
+
+    Eigen::MatrixXd build_mat_sample_poly(std::vector<Eigen::MatrixXd> Tau,
+                                          int num_samples, int deg);
 
     // Variables
     int _deg;

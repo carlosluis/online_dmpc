@@ -4,8 +4,6 @@
 using namespace std;
 using namespace Eigen;
 
-
-
 BezierCurve::BezierCurve(int deg, int num_segments, int dim){
 	cout << "Creating a Bezier curve with " << num_segments << " segments of degree "
          << deg << " in " << dim << " dimensions" << endl;
@@ -18,6 +16,8 @@ BezierCurve::BezierCurve(int deg, int num_segments, int dim){
     cout << "Initializing the vector of control points as zero" << endl;
     _num_ctrl_pts = dim*num_segments*(deg+1);
     _ctrl_pts = VectorXd::Zero(_num_ctrl_pts);
+
+    // Build the matrices defined by the bezier curve parameters
     _Beta = bernstein_to_power(_deg);
 }
 
@@ -115,10 +115,10 @@ MatrixXd BezierCurve::get_mat_sample_poly(float segment_duration,
         samples++;
     }
 
-    return build_sample_mat_poly(Tau, t_samples.size(), deg);
+    return build_mat_sample_poly(Tau, t_samples.size(), deg);
 }
 
-MatrixXd BezierCurve::build_sample_mat_poly(std::vector<Eigen::MatrixXd> Tau,
+MatrixXd BezierCurve::build_mat_sample_poly(std::vector<Eigen::MatrixXd> Tau,
                                             int num_samples, int deg) {
     int N = deg + 1;
     MatrixXd T_sample_poly = MatrixXd::Zero(3*num_samples, 3*N*_num_segments);
@@ -141,15 +141,54 @@ MatrixXd BezierCurve::build_sample_mat_poly(std::vector<Eigen::MatrixXd> Tau,
     return T_sample_poly;
 }
 
-void BezierCurve::set_input_samples(float segment_duration, Eigen::VectorXd t_samples) {
+MatrixXd BezierCurve::get_mat_input_sampling(float segment_duration,
+                                             Eigen::VectorXd t_samples) {
     // based on the t_samples, create the internal matrix that will sample the optimized vector
     _Gamma = get_mat_sample_poly(segment_duration, t_samples, _deg);
     _GammaBeta = _Gamma*_Beta;
+    return _GammaBeta;
 }
 
-Eigen::VectorXd BezierCurve::get_sample(float hola){
-
+VectorXd BezierCurve::get_input_sequence(Eigen::VectorXd x){
+    return _GammaBeta * x;
 }
+
+MatrixXd BezierCurve::get_mat_sumsqrd_der(float T, Eigen::VectorXd weights){
+    float mult;
+    MatrixXd Q_sum = MatrixXd::Zero(_deg + 1, _deg + 1);
+    MatrixXd Q = MatrixXd::Zero(_deg + 1, _deg + 1);
+    MatrixXd Qd;
+
+    for (int r = 0; r <= _deg; ++r){
+        for (int i = 0; i <= _deg; ++i){
+            for (int k = 0; k <= _deg; ++k){
+                if (i >= r && k >= r){
+                    mult = 1.0;
+                    for (int m = 0; m <= r - 1; ++m){
+                        mult = mult * (i - m) * (k - m);
+                    }
+                    Q(i, k) = weights(r) * 2 * mult * pow(T, (i + k - 2*r + 1)) / (i + k - 2*r + 1);
+                }
+                else
+                    Q(i, k) = 0;
+            }
+        }
+
+        Q_sum += Q;
+        Q = MatrixXd::Zero(_deg + 1, _deg + 1);
+    }
+
+    Qd = increase_matrix_dim(Q_sum, _dim);
+    return kroneckerProduct(MatrixXd::Identity(_num_segments, _num_segments), Qd);
+}
+
+MatrixXd BezierCurve::get_mat_energy_cost(float segment_duration, Eigen::VectorXd weights) {
+    MatrixXd Alpha = get_mat_sumsqrd_der(segment_duration, weights);
+    MatrixXd H_energy = _Beta.transpose() * Alpha * _Beta;
+    return  H_energy;
+}
+
+
 
 
 

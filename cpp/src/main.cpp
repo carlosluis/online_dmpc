@@ -13,7 +13,7 @@ int main() {
     VectorXd cr = VectorXd::Zero(5+1);
     cr(2) = .008;
 
-    VectorXd t_samples = VectorXd::LinSpaced(8, 0.2, 3);
+    VectorXd t_samples = VectorXd::LinSpaced(16, 0, 3);
 
     cout << t_samples << endl << endl;
 
@@ -23,7 +23,12 @@ int main() {
 
     MatrixXd hola2 = test.get_mat_eq_constr(3);
 
-    cout << hola2.block(0,0, 36, 15) << endl;
+    std::vector<MatrixXd> hola3 = test.get_vec_input_sampling(t_samples);
+
+//    for (int k = 0; k < hola3.size(); ++k){
+//        cout << hola3.at(k).block(0,0,15,15) << endl << endl;
+//    }
+
 
 	return 0;
 }

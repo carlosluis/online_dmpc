@@ -24,9 +24,7 @@ public:
 	// Public methods
     void set_ctrl_pts(Eigen::VectorXd x);
 
-    Eigen::MatrixXd get_mat_input_sampling(Eigen::VectorXd t_samples);
-
-    Eigen::VectorXd get_input_sequence(Eigen::VectorXd x);
+    std::vector<Eigen::MatrixXd> get_vec_input_sampling(Eigen::VectorXd t_samples);
 
     Eigen::MatrixXd get_mat_energy_cost(Eigen::VectorXd weights);
 
@@ -37,8 +35,6 @@ public:
 
     Eigen::MatrixXd get_mat_eq_constr (int deg_poly);
 
-
-
 private:
     // Methods
     Eigen::MatrixXd bernstein_to_power(int deg);
@@ -46,12 +42,14 @@ private:
 
     Eigen::MatrixXd get_mat_sumsqrd_der(Eigen::VectorXd weights);
 
-    Eigen::MatrixXd get_mat_sample_poly(Eigen::VectorXd t_samples, int deg);
+    Eigen::MatrixXd get_mat_poly_sampling(Eigen::VectorXd t_samples, int deg);
 
-    Eigen::MatrixXd build_mat_sample_poly(std::vector<Eigen::MatrixXd> Tau,
+    Eigen::MatrixXd build_mat_poly_sampling(std::vector<Eigen::MatrixXd> Tau,
                                           int num_samples, int deg);
 
     Eigen::MatrixXd augmented_form(Eigen::MatrixXd mat);
+
+    Eigen::MatrixXd get_mat_input_sampling(Eigen::VectorXd t_samples, int r);
 
 
 

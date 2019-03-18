@@ -23,6 +23,10 @@ BezierCurve::BezierCurve(int deg, int num_segments, double t_segment, int dim){
 
     // Obtain matrices that compute the n-th derivative of position ctrl points
     _T_ctrl_pts = derivate_ctrl_pts();
+
+    // Set matrix that obtains power basis coefficients for all derivatives of bezier curve
+
+
 }
 
 MatrixXd BezierCurve::bernstein_to_power(int deg) {
@@ -77,7 +81,7 @@ void BezierCurve::set_ctrl_pts(Eigen::VectorXd x) {
     _ctrl_pts = x;
 }
 
-MatrixXd BezierCurve::get_mat_sample_poly(Eigen::VectorXd t_samples, int deg) {
+MatrixXd BezierCurve::get_mat_poly_sampling(Eigen::VectorXd t_samples, int deg) {
     double T_final = _num_segments * _t_segment;
     double t;
     int segment_id;
@@ -118,10 +122,10 @@ MatrixXd BezierCurve::get_mat_sample_poly(Eigen::VectorXd t_samples, int deg) {
         samples++;
     }
 
-    return build_mat_sample_poly(Tau, t_samples.size(), deg);
+    return build_mat_poly_sampling(Tau, t_samples.size(), deg);
 }
 
-MatrixXd BezierCurve::build_mat_sample_poly(std::vector<Eigen::MatrixXd> Tau,
+MatrixXd BezierCurve::build_mat_poly_sampling(std::vector<Eigen::MatrixXd> Tau,
                                             int num_samples, int deg) {
     int N = deg + 1;
     MatrixXd T_sample_poly = MatrixXd::Zero(3*num_samples, 3*N*_num_segments);
@@ -144,15 +148,34 @@ MatrixXd BezierCurve::build_mat_sample_poly(std::vector<Eigen::MatrixXd> Tau,
     return T_sample_poly;
 }
 
-MatrixXd BezierCurve::get_mat_input_sampling(Eigen::VectorXd t_samples) {
-    // based on the t_samples, create the internal matrix that will sample the optimized vector
-    _Gamma = get_mat_sample_poly(t_samples, _deg);
-    _GammaBeta = _Gamma*_Beta;
-    return _GammaBeta;
+std::vector<MatrixXd> BezierCurve::get_vec_input_sampling(Eigen::VectorXd t_samples) {
+    // based on the t_samples, create the set of matrices that can sample all the derivatives
+    // of the bezier curve, e.g. Phi.at(0) samples the position, Phi.at(1) samples the velocity
+
+    std::vector<MatrixXd> Phi;
+
+    for (int r = 0; r <= _deg; ++r)
+        Phi.push_back(get_mat_input_sampling(t_samples, r));
+
+    return Phi;
 }
 
-VectorXd BezierCurve::get_input_sequence(Eigen::VectorXd x){
-    return _GammaBeta * x;
+MatrixXd BezierCurve::get_mat_input_sampling(Eigen::VectorXd t_samples, int r) {
+    // Create matrix that samples the r-th derivative of the bezier curve
+
+    MatrixXd Sigma_r;
+    MatrixXd Beta_r;
+    MatrixXd Tau_r;
+
+    if (r > 0)
+        Sigma_r = augmented_form(_T_ctrl_pts.at(r - 1));
+    else
+        Sigma_r = MatrixXd::Identity(_num_ctrl_pts, _num_ctrl_pts);
+
+    Beta_r = bernstein_to_power(_deg - r);
+    Tau_r = get_mat_poly_sampling(t_samples, _deg - r);
+
+    return Tau_r * Beta_r * Sigma_r;
 }
 
 MatrixXd BezierCurve::get_mat_sumsqrd_der(Eigen::VectorXd weights){
@@ -224,17 +247,8 @@ std::vector<MatrixXd> BezierCurve::derivate_ctrl_pts() {
 Constraint BezierCurve::limit_derivative(int n, Eigen::VectorXd t_samples,
                                          VectorXd min, VectorXd max) {
 
-    // Get the appropriate matrix that transforms ctrl points to ctrl points of the n-th derivative
-    MatrixXd M = _T_ctrl_pts.at(n - 1);
-
-    // Expand matrix to 3D
-    MatrixXd Sigma_n = augmented_form(M);
-
-    MatrixXd Beta_n = bernstein_to_power(_deg - n);
-    MatrixXd Tau_n = get_mat_sample_poly(t_samples, _deg - n);
-
     // Build 'A' matrix for the constraint
-    MatrixXd A_in = Tau_n * Beta_n * Sigma_n;
+    MatrixXd A_in = get_mat_input_sampling(t_samples, n);
     MatrixXd A_in_t(2 * A_in.rows(), A_in.cols());
     A_in_t << A_in, -A_in;
 

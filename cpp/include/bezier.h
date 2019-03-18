@@ -15,7 +15,7 @@ struct Constraint {
 
 class BezierCurve {
 public:
-	BezierCurve(int deg, int l, float t_segment, int dim);
+	BezierCurve(int deg, int l, double t_segment, int dim);
 	~BezierCurve(){};
 
     // Public variables
@@ -34,6 +34,10 @@ public:
 
     Constraint limit_derivative(int degree, Eigen::VectorXd t_samples,
                                 Eigen::VectorXd min, Eigen::VectorXd max);
+
+    Eigen::MatrixXd get_mat_eq_constr (int deg_poly);
+
+
 
 private:
     // Methods
@@ -54,7 +58,7 @@ private:
     // Variables
     int _deg;
     int _num_segments;
-    float _t_segment;
+    double _t_segment;
     int _dim;
     int _num_ctrl_pts;
     Eigen::VectorXd _ctrl_pts;

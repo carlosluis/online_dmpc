@@ -16,7 +16,6 @@ A_eq = augment_array_ndim(D, ndim);
 
 % Make T_ctrl_pts to be a 3D matrix and representing l Bezier segments 
 if deg_poly > 0
-    T_ctrl_pts_3d{deg_poly} = [];
     D_der{deg_poly} = [];
     for k = 1:deg_poly
         % Select the ctrl points we need and sustract them

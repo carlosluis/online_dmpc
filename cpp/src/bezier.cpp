@@ -4,7 +4,7 @@
 using namespace std;
 using namespace Eigen;
 
-BezierCurve::BezierCurve(int deg, int num_segments, float t_segment, int dim){
+BezierCurve::BezierCurve(int deg, int num_segments, double t_segment, int dim){
 	cout << "Creating a Bezier curve with " << num_segments << " segments of degree "
          << deg << " in " << dim << " dimensions" << endl;
 
@@ -78,8 +78,8 @@ void BezierCurve::set_ctrl_pts(Eigen::VectorXd x) {
 }
 
 MatrixXd BezierCurve::get_mat_sample_poly(Eigen::VectorXd t_samples, int deg) {
-    float T_final = _num_segments * _t_segment;
-    float t;
+    double T_final = _num_segments * _t_segment;
+    double t;
     int segment_id;
     int prev_segment_id;
     int samples = 0;
@@ -156,11 +156,11 @@ VectorXd BezierCurve::get_input_sequence(Eigen::VectorXd x){
 }
 
 MatrixXd BezierCurve::get_mat_sumsqrd_der(Eigen::VectorXd weights){
-    float mult;
+    double mult;
     MatrixXd Q_sum = MatrixXd::Zero(_deg + 1, _deg + 1);
     MatrixXd Q = MatrixXd::Zero(_deg + 1, _deg + 1);
     MatrixXd Qd;
-    float T = _t_segment;
+    double T = _t_segment;
 
     for (int r = 0; r <= _deg; ++r){
         for (int i = 0; i <= _deg; ++i){
@@ -253,6 +253,53 @@ MatrixXd BezierCurve::augmented_form(Eigen::MatrixXd mat) {
     MatrixXd mat_d = increase_matrix_dim(mat, _dim);
     return kroneckerProduct(MatrixXd::Identity(_num_segments, _num_segments), mat_d);
 }
+
+MatrixXd BezierCurve::get_mat_eq_constr(int deg_poly) {
+
+    MatrixXd Aeq = MatrixXd::Zero((deg_poly + 1) * _dim * _num_segments, _num_ctrl_pts);
+    int num_cols = _deg + 1;
+    int num_rows = _dim * _num_segments;
+
+    // Construct initial condition
+    MatrixXd D = MatrixXd::Zero(_num_segments, _num_ctrl_pts / _dim);
+    for (int k = 0; k < _num_segments; ++k){
+        if (k == 0) {
+            D(0, 0) = 1;
+        }
+        else {
+            D(k, k * (_deg + 1)) = 1;
+            D(k, k * (_deg + 1) + 1) = -1;
+        }
+    }
+
+    Aeq.block(0, 0, _dim * _num_segments, _num_ctrl_pts) = increase_matrix_dim(D, _dim);
+
+    if (deg_poly > 0) {
+        std::vector<MatrixXd> D_der;
+        for (int k = 0; k < deg_poly; ++k) {
+            MatrixXd aux = MatrixXd::Zero(_num_segments, _num_ctrl_pts / _dim);
+            int rows = _T_ctrl_pts.at(k).rows();
+            for (int n = 0; n < _num_segments; ++n) {
+                if (n == 0)
+                    aux.block(0, 0, 1, num_cols) = _T_ctrl_pts.at(k).row(0);
+                else {
+                    int col = (n - 1) * (_deg + 1);
+                    RowVectorXd row_insert = RowVectorXd::Zero(_num_segments * num_cols);
+                    row_insert.segment(col, 2 * num_cols) << _T_ctrl_pts.at(k).row(rows - 1),
+                                                             -_T_ctrl_pts.at(k).row(0);
+
+                    aux.block(n, 0, 1, _num_segments * num_cols) = row_insert;
+                }
+            }
+
+            Aeq.block((k+1)*num_rows, 0, num_rows, _num_ctrl_pts) = increase_matrix_dim(aux, _dim);
+        }
+    }
+
+    return Aeq;
+}
+
+
 
 
 

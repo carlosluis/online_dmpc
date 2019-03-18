@@ -19,8 +19,11 @@ int main() {
 
     Vector3d alim = 3*VectorXd::Ones(3);
 
-    test.limit_derivative(2, t_samples, -alim, alim);
+    Constraint hola = test.limit_derivative(2, t_samples, -alim, alim);
 
+    MatrixXd hola2 = test.get_mat_eq_constr(3);
+
+    cout << hola2.block(0,0, 36, 15) << endl;
 
 	return 0;
 }

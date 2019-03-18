@@ -4,13 +4,14 @@
 using namespace std;
 using namespace Eigen;
 
-BezierCurve::BezierCurve(int deg, int num_segments, int dim){
+BezierCurve::BezierCurve(int deg, int num_segments, float t_segment, int dim){
 	cout << "Creating a Bezier curve with " << num_segments << " segments of degree "
          << deg << " in " << dim << " dimensions" << endl;
 
     // Assign to private variables
     _deg = deg;
     _num_segments = num_segments;
+    _t_segment = t_segment;
     _dim = dim;
 
     cout << "Initializing the vector of control points as zero" << endl;
@@ -19,16 +20,20 @@ BezierCurve::BezierCurve(int deg, int num_segments, int dim){
 
     // Build the matrices defined by the bezier curve parameters
     _Beta = bernstein_to_power(_deg);
+
+    // Obtain matrices that compute the n-th derivative of position ctrl points
+    _T_ctrl_pts = derivate_ctrl_pts();
 }
 
 MatrixXd BezierCurve::bernstein_to_power(int deg) {
     MatrixXd delta = MatrixXd::Zero(deg + 1, deg + 1);
     for (int k = 0; k < deg + 1; ++k){
         for (int i = k; i <= deg; ++i){
-            delta(i, k) = pow(-1, i - k)*nchoosek(deg, i)*nchoosek(i, k);
+            delta(i, k) = pow(-1, i - k) * nchoosek(deg, i) * nchoosek(i, k);
         }
     }
-    return increase_matrix_dim(delta,_dim);;
+
+    return augmented_form(delta);
 }
 
 MatrixXd BezierCurve::increase_matrix_dim(Eigen::MatrixXd matrix, int dim) {
@@ -72,10 +77,8 @@ void BezierCurve::set_ctrl_pts(Eigen::VectorXd x) {
     _ctrl_pts = x;
 }
 
-MatrixXd BezierCurve::get_mat_sample_poly(float segment_duration,
-                                          Eigen::VectorXd t_samples,
-                                          int deg) {
-    float T_final = _num_segments * segment_duration;
+MatrixXd BezierCurve::get_mat_sample_poly(Eigen::VectorXd t_samples, int deg) {
+    float T_final = _num_segments * _t_segment;
     float t;
     int segment_id;
     int prev_segment_id;
@@ -87,17 +90,17 @@ MatrixXd BezierCurve::get_mat_sample_poly(float segment_duration,
     for (int k = 0; k < t_samples.size(); ++k) {
 
         if (abs(t_samples(k) - T_final) < 1e-4){
-            t = segment_duration;
+            t = _t_segment;
             force_update = true;
 
             for (int n = 0; n < deg + 1; ++n)
-                tmp.push_back(pow(t / segment_duration, n));
+                tmp.push_back(pow(t / _t_segment, n));
             samples++;
         }
 
         else {
-            segment_id = floor(t_samples(k) / segment_duration);
-            t = fmod(t_samples(k), segment_duration);
+            segment_id = floor(t_samples(k) / _t_segment);
+            t = fmod(t_samples(k), _t_segment);
         }
 
         bool new_segment = segment_id != prev_segment_id;
@@ -109,7 +112,7 @@ MatrixXd BezierCurve::get_mat_sample_poly(float segment_duration,
         }
 
         for (int n = 0; n < deg + 1; ++n)
-            tmp.push_back(pow(t / segment_duration, n));
+            tmp.push_back(pow(t / _t_segment, n));
 
         prev_segment_id = segment_id;
         samples++;
@@ -141,10 +144,9 @@ MatrixXd BezierCurve::build_mat_sample_poly(std::vector<Eigen::MatrixXd> Tau,
     return T_sample_poly;
 }
 
-MatrixXd BezierCurve::get_mat_input_sampling(float segment_duration,
-                                             Eigen::VectorXd t_samples) {
+MatrixXd BezierCurve::get_mat_input_sampling(Eigen::VectorXd t_samples) {
     // based on the t_samples, create the internal matrix that will sample the optimized vector
-    _Gamma = get_mat_sample_poly(segment_duration, t_samples, _deg);
+    _Gamma = get_mat_sample_poly(t_samples, _deg);
     _GammaBeta = _Gamma*_Beta;
     return _GammaBeta;
 }
@@ -153,11 +155,12 @@ VectorXd BezierCurve::get_input_sequence(Eigen::VectorXd x){
     return _GammaBeta * x;
 }
 
-MatrixXd BezierCurve::get_mat_sumsqrd_der(float T, Eigen::VectorXd weights){
+MatrixXd BezierCurve::get_mat_sumsqrd_der(Eigen::VectorXd weights){
     float mult;
     MatrixXd Q_sum = MatrixXd::Zero(_deg + 1, _deg + 1);
     MatrixXd Q = MatrixXd::Zero(_deg + 1, _deg + 1);
     MatrixXd Qd;
+    float T = _t_segment;
 
     for (int r = 0; r <= _deg; ++r){
         for (int i = 0; i <= _deg; ++i){
@@ -178,14 +181,77 @@ MatrixXd BezierCurve::get_mat_sumsqrd_der(float T, Eigen::VectorXd weights){
         Q = MatrixXd::Zero(_deg + 1, _deg + 1);
     }
 
-    Qd = increase_matrix_dim(Q_sum, _dim);
-    return kroneckerProduct(MatrixXd::Identity(_num_segments, _num_segments), Qd);
+    return augmented_form(Q);
 }
 
-MatrixXd BezierCurve::get_mat_energy_cost(float segment_duration, Eigen::VectorXd weights) {
-    MatrixXd Alpha = get_mat_sumsqrd_der(segment_duration, weights);
+MatrixXd BezierCurve::get_mat_energy_cost(Eigen::VectorXd weights) {
+    MatrixXd Alpha = get_mat_sumsqrd_der(weights);
     MatrixXd H_energy = _Beta.transpose() * Alpha * _Beta;
     return  H_energy;
+}
+
+std::vector<MatrixXd> BezierCurve::derivate_ctrl_pts() {
+    // Construct matrices that transform position ctrl pts to ctrl pts of the n-th derivative.
+
+    std::vector<MatrixXd> T_ctrl_pts;
+    std::vector<MatrixXd> der_mats;
+    RowVector2d rows;
+    rows << -1, 1;
+
+    for (int c = _deg; c > 0; --c){
+        MatrixXd aux = MatrixXd::Zero(c, c + 1);
+        RowVector2d insert_rows = c*rows;
+
+        for (int l = 0; l < c; ++l)
+            aux.block(l, l, 1, 2) = insert_rows;
+
+        der_mats.push_back(aux);
+    }
+
+    for (int k = 0; k < _deg; ++k){
+        MatrixXd aux = der_mats.at(0);
+        for (int k_aux = _deg - 1; k_aux > k; --k_aux)
+            aux = der_mats.at(_deg - k_aux) * aux;
+
+        cout << aux << endl;
+        T_ctrl_pts.push_back(aux);
+    }
+    // Reverse the order for intuitive ordering - first element corresponds to velocity ctrl pts
+    std::reverse(T_ctrl_pts.begin(), T_ctrl_pts.end());
+    return T_ctrl_pts;
+}
+
+Constraint BezierCurve::limit_derivative(int n, Eigen::VectorXd t_samples,
+                                         VectorXd min, VectorXd max) {
+
+    // Get the appropriate matrix that transforms ctrl points to ctrl points of the n-th derivative
+    MatrixXd M = _T_ctrl_pts.at(n - 1);
+
+    // Expand matrix to 3D
+    MatrixXd Sigma_n = augmented_form(M);
+
+    MatrixXd Beta_n = bernstein_to_power(_deg - n);
+    MatrixXd Tau_n = get_mat_sample_poly(t_samples, _deg - n);
+
+    // Build 'A' matrix for the constraint
+    MatrixXd A_in = Tau_n * Beta_n * Sigma_n;
+    MatrixXd A_in_t(2 * A_in.rows(), A_in.cols());
+    A_in_t << A_in, -A_in;
+
+    // Build 'b' vector for the constraint
+    VectorXd b_max = max.replicate(t_samples.size(), 1);
+    VectorXd b_min = min.replicate(t_samples.size(), 1);
+    VectorXd b_in(2 * b_max.size());
+    b_in << b_max, b_min;
+
+    // Assemble constraint struct
+    Constraint constr = {A_in, b_in};
+    return constr;
+}
+
+MatrixXd BezierCurve::augmented_form(Eigen::MatrixXd mat) {
+    MatrixXd mat_d = increase_matrix_dim(mat, _dim);
+    return kroneckerProduct(MatrixXd::Identity(_num_segments, _num_segments), mat_d);
 }
 
 

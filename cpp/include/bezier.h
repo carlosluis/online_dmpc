@@ -8,9 +8,14 @@
 typedef Eigen::Map<Eigen::Matrix<double,Eigen::Dynamic,
                    Eigen::Dynamic, Eigen::RowMajor>> MapMatrixXd;
 
+struct Constraint {
+    Eigen::MatrixXd A;
+    Eigen::VectorXd b;
+};
+
 class BezierCurve {
 public:
-	BezierCurve(int deg, int l, int dim);
+	BezierCurve(int deg, int l, float t_segment, int dim);
 	~BezierCurve(){};
 
     // Public variables
@@ -19,34 +24,44 @@ public:
 	// Public methods
     void set_ctrl_pts(Eigen::VectorXd x);
 
-    Eigen::MatrixXd get_mat_input_sampling(float segment_duration, Eigen::VectorXd t_samples);
+    Eigen::MatrixXd get_mat_input_sampling(Eigen::VectorXd t_samples);
 
     Eigen::VectorXd get_input_sequence(Eigen::VectorXd x);
 
-    Eigen::MatrixXd get_mat_energy_cost(float segment_duration, Eigen::VectorXd weights);
+    Eigen::MatrixXd get_mat_energy_cost(Eigen::VectorXd weights);
+
+    std::vector<Eigen::MatrixXd> derivate_ctrl_pts();
+
+    Constraint limit_derivative(int degree, Eigen::VectorXd t_samples,
+                                Eigen::VectorXd min, Eigen::VectorXd max);
 
 private:
     // Methods
     Eigen::MatrixXd bernstein_to_power(int deg);
     Eigen::MatrixXd increase_matrix_dim(Eigen::MatrixXd matrix, int dim);
 
-    Eigen::MatrixXd get_mat_sumsqrd_der(float T, Eigen::VectorXd weights);
+    Eigen::MatrixXd get_mat_sumsqrd_der(Eigen::VectorXd weights);
 
-    Eigen::MatrixXd get_mat_sample_poly(float segment_duration, Eigen::VectorXd t_samples,
-                                        int deg);
+    Eigen::MatrixXd get_mat_sample_poly(Eigen::VectorXd t_samples, int deg);
 
     Eigen::MatrixXd build_mat_sample_poly(std::vector<Eigen::MatrixXd> Tau,
                                           int num_samples, int deg);
 
+    Eigen::MatrixXd augmented_form(Eigen::MatrixXd mat);
+
+
+
     // Variables
     int _deg;
     int _num_segments;
+    float _t_segment;
     int _dim;
     int _num_ctrl_pts;
     Eigen::VectorXd _ctrl_pts;
     Eigen::MatrixXd _Gamma;
     Eigen::MatrixXd _Beta;
     Eigen::MatrixXd _GammaBeta;
+    std::vector<Eigen::MatrixXd> _T_ctrl_pts;
 };
 
 // Helper function to shift an Eigen vector n positions to the right, zero-padding

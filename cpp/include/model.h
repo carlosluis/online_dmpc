@@ -7,17 +7,6 @@
 
 #include <Eigen/Dense>
 
-// Define parameters to create a 3D double integrator model
-// We assume identical dynamics for X and Y, based on quadcopter experiments
-struct DblInt3DParams {
-    float zeta_xy,  tau_xy, zeta_z, tau_z;
-};
-
-// To be used for ground robots or quadcopters flying in the plane
-struct DblInt2DParams {
-    float zeta_x,  tau_x, zeta_y, tau_y;
-};
-
 // Define a struct for lifted matrices in position and velocity separately
 struct StatePropagator {
     Eigen::MatrixXd pos;
@@ -40,13 +29,23 @@ protected:
 
 class DoubleIntegrator3D : public DoubleIntegrator {
 public:
-    DoubleIntegrator3D (float time_step, DblInt3DParams params);
+    // Define parameters to create a 3D double integrator model
+    // We assume identical dynamics for X and Y, based on quadcopter experiments
+    struct Params {
+        float zeta_xy,  tau_xy, zeta_z, tau_z;
+    };
+    DoubleIntegrator3D (float time_step, DoubleIntegrator3D::Params* p);
     ~DoubleIntegrator3D(){};
 };
 
 class DoubleIntegrator2D : public DoubleIntegrator {
 public:
-    DoubleIntegrator2D (float time_step, DblInt2DParams params);
+    // To be used for ground robots or quadcopters flying in the plane
+    struct Params {
+        float zeta_x,  tau_x, zeta_y, tau_y;
+    };
+
+    DoubleIntegrator2D (float time_step, DoubleIntegrator2D::Params p);
     ~DoubleIntegrator2D(){};
 };
 

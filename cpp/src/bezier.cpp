@@ -4,18 +4,15 @@
 using namespace std;
 using namespace Eigen;
 
-BezierCurve::BezierCurve(int deg, int num_segments, double t_segment, int dim){
-	cout << "Creating a Bezier curve with " << num_segments << " segments of degree "
-         << deg << " in " << dim << " dimensions" << endl;
+BezierCurve::BezierCurve(BezierCurve::Params* p){
 
     // Assign to private variables
-    _deg = deg;
-    _num_segments = num_segments;
-    _t_segment = t_segment;
-    _dim = dim;
+    _deg = p->deg;
+    _num_segments = p->num_segments;
+    _t_segment = p->t_segment;
+    _dim = p->dim;
 
-    cout << "Initializing the vector of control points as zero" << endl;
-    _num_ctrl_pts = dim*num_segments*(deg+1);
+    _num_ctrl_pts = _dim*_num_segments*(_deg+1);
     _ctrl_pts = VectorXd::Zero(_num_ctrl_pts);
 
     // Build the matrices defined by the bezier curve parameters
@@ -200,7 +197,7 @@ MatrixXd BezierCurve::get_mat_sumsqrd_der(Eigen::VectorXd weights){
         Q = MatrixXd::Zero(_deg + 1, _deg + 1);
     }
 
-    return augmented_form(Q);
+    return augmented_form(Q_sum);
 }
 
 MatrixXd BezierCurve::get_mat_energy_cost(Eigen::VectorXd weights) {
@@ -232,7 +229,6 @@ std::vector<MatrixXd> BezierCurve::derivate_ctrl_pts() {
         for (int k_aux = _deg - 1; k_aux > k; --k_aux)
             aux = der_mats.at(_deg - k_aux) * aux;
 
-        cout << aux << endl;
         T_ctrl_pts.push_back(aux);
     }
     // Reverse the order for intuitive ordering - first element corresponds to velocity ctrl pts

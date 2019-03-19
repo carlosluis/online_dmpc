@@ -15,7 +15,12 @@ struct Constraint {
 
 class BezierCurve {
 public:
-	BezierCurve(int deg, int l, double t_segment, int dim);
+    struct Params{
+        int deg, num_segments, dim;
+        float t_segment;
+    };
+
+	BezierCurve(BezierCurve::Params* p);
 	~BezierCurve(){};
 
     // Public variables

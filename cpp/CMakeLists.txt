@@ -28,8 +28,14 @@ add_library(bezier
 add_library(model
 	src/model.cpp)
 
-target_link_libraries(run
+add_library(generator
+	src/generator.cpp)
+
+target_link_libraries(generator
 	bezier
-	model
+	model)
+
+target_link_libraries(run
+	generator
 )
 

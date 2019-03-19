@@ -23,10 +23,6 @@ BezierCurve::BezierCurve(int deg, int num_segments, double t_segment, int dim){
 
     // Obtain matrices that compute the n-th derivative of position ctrl points
     _T_ctrl_pts = derivate_ctrl_pts();
-
-    // Set matrix that obtains power basis coefficients for all derivatives of bezier curve
-
-
 }
 
 MatrixXd BezierCurve::bernstein_to_power(int deg) {
@@ -126,7 +122,7 @@ MatrixXd BezierCurve::get_mat_poly_sampling(Eigen::VectorXd t_samples, int deg) 
 }
 
 MatrixXd BezierCurve::build_mat_poly_sampling(std::vector<Eigen::MatrixXd> Tau,
-                                            int num_samples, int deg) {
+                                              int num_samples, int deg) {
     int N = deg + 1;
     MatrixXd T_sample_poly = MatrixXd::Zero(3*num_samples, 3*N*_num_segments);
     std::vector<MatrixXd> Tau_d(_num_segments);

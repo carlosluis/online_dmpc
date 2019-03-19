@@ -1,12 +1,15 @@
 #include <iostream>
 #include <Eigen/Dense>
 #include "bezier.h"
+#include "model.h"
 
 using namespace std;
 using namespace Eigen;
 
 int main() {
 	cout << "Hello world!" << endl;
+
+    // Testing the BezierCurve class
 	BezierCurve test(5,3, 1.0,3);
     test.set_ctrl_pts(VectorXd::Zero(54));
 //    cout << test.bernstein_to_power(5) << endl;
@@ -29,6 +32,15 @@ int main() {
 //        cout << hola3.at(k).block(0,0,15,15) << endl << endl;
 //    }
 
+    // Testing the DynamicModel class
+    DblInt3DParams params = {0.6502, 0.3815, 0.9103, 0.3};
 
+    DoubleIntegrator3D model(0.2, params);
+    StatePropagator Lambda = model.get_lambda(t_samples.size());
+    StatePropagator A0 = model.get_A0(t_samples.size());
+
+//    cout << Lambda.vel.block(0,0,48, 15) << endl << endl;
+
+//    cout << A0.vel << endl;
 	return 0;
 }

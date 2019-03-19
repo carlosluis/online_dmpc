@@ -25,7 +25,11 @@ add_executable(run
 add_library(bezier
 	src/bezier.cpp)
 
+add_library(model
+	src/model.cpp)
+
 target_link_libraries(run
 	bezier
+	model
 )
 

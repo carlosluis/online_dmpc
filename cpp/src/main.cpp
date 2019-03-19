@@ -16,7 +16,15 @@ int main() {
     //MPC tuning parameters
     VectorXd cr = VectorXd::Zero(5+1);
     cr(2) = .008;
-    MpcParams mpc_params = {cr};
+
+    PhysLimits limits;
+    limits.pmin = (Eigen::Vector3d() << -2.5, -2.5, 0.2).finished();
+    limits.pmax = (Eigen::Vector3d() << 2.5, 2.5, 2.2).finished();
+    limits.amin = (Eigen::Vector3d() << -2.0, -2.0, -2.0).finished();
+    limits.amax = (Eigen::Vector3d() << 2.0, 2.0, 2.0).finished();
+
+
+    MpcParams mpc_params = {0.2, 0.01, 16, &limits, cr};
 
     // Testing the Generator class
     Generator::Params p = {&bezier_params, &model_params, &mpc_params};

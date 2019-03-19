@@ -251,7 +251,7 @@ Constraint BezierCurve::limit_derivative(int n, Eigen::VectorXd t_samples,
     b_in << b_max, b_min;
 
     // Assemble constraint struct
-    Constraint constr = {A_in, b_in};
+    Constraint constr = {A_in_t, b_in};
     return constr;
 }
 

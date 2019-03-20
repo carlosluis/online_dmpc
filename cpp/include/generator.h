@@ -18,19 +18,19 @@ struct PhysLimits {
 struct MpcParams {
     float h, Ts;
     int k_hor;
-    PhysLimits* limits;
+    const PhysLimits& limits;
     Eigen::VectorXd energy_weights;
 };
 
 class Generator {
 public:
     struct Params {
-        BezierCurve::Params* bezier_params;
-        DoubleIntegrator3D::Params* model_params;
-        MpcParams* mpc_params;
+        const BezierCurve::Params& bezier_params;
+        const DoubleIntegrator3D::Params& model_params;
+        const MpcParams& mpc_params;
     };
 
-    Generator(Generator::Params* p);
+    Generator(const Generator::Params& p);
     ~Generator(){};
 
 private:
@@ -39,13 +39,17 @@ private:
     float _k_hor;
     int _l;
 
-    BezierCurve* _bezier;
-    DoubleIntegrator* _model_pred;
-    DoubleIntegrator* _model_exec;
-    Eigen::MatrixXd _H_snap;
+    BezierCurve _bezier;
+    DoubleIntegrator3D _model_pred;
+    DoubleIntegrator3D _model_exec;
+    Eigen::MatrixXd _H_energy;
+    Constraint _ineq;
+    Constraint _eq;
+    StatePropagator _Phi_pred;
+    StatePropagator _Phi_exec;
 
     // Methods
-    Constraint build_ineq_constr(PhysLimits* lim);
+    void build_ineq_constr(const PhysLimits& lim, Constraint* ineq);
 };
 
 #endif //ONLINE_PLANNING_GENERATOR_H

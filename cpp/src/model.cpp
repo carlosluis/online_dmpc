@@ -52,11 +52,11 @@ StatePropagator DoubleIntegrator::get_A0(int K) {
 }
 
 
-DoubleIntegrator3D::DoubleIntegrator3D(float ts, DoubleIntegrator3D::Params* p) {
+DoubleIntegrator3D::DoubleIntegrator3D(const float& ts, const DoubleIntegrator3D::Params& p) {
 
     _dim = 3;
-    float omega_xy = 1 / p->tau_xy;
-    float omega_z = 1 / p->tau_z;
+    float omega_xy = 1 / p.tau_xy;
+    float omega_z = 1 / p.tau_z;
 
     // Create the 3D double integrator model
     _model_A = MatrixXd::Zero(6, 6);
@@ -64,9 +64,9 @@ DoubleIntegrator3D::DoubleIntegrator3D(float ts, DoubleIntegrator3D::Params* p) 
     _model_A << 1, 0, 0, ts, 0, 0,
                 0, 1, 0, 0, ts, 0,
                 0, 0, 1, 0, 0, ts,
-                -ts * pow(omega_xy, 2), 0, 0, 1 - (2 * omega_xy * ts * p->zeta_xy), 0, 0,
-                0, -ts * pow(omega_xy, 2), 0, 0, 1 - (2 * omega_xy * ts * p->zeta_xy), 0,
-                0, 0, -ts * pow(omega_z, 2), 0, 0, 1 - (2 * omega_z * ts * p->zeta_z);
+                -ts * pow(omega_xy, 2), 0, 0, 1 - (2 * omega_xy * ts * p.zeta_xy), 0, 0,
+                0, -ts * pow(omega_xy, 2), 0, 0, 1 - (2 * omega_xy * ts * p.zeta_xy), 0,
+                0, 0, -ts * pow(omega_z, 2), 0, 0, 1 - (2 * omega_z * ts * p.zeta_z);
 
     _model_B << MatrixXd::Zero(3, 3),
                 ts * pow(omega_xy, 2), 0, 0,

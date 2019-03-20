@@ -4,13 +4,13 @@
 using namespace std;
 using namespace Eigen;
 
-BezierCurve::BezierCurve(BezierCurve::Params* p){
+BezierCurve::BezierCurve(const BezierCurve::Params& p){
 
-    // Assign to private variables
-    _deg = p->deg;
-    _num_segments = p->num_segments;
-    _t_segment = p->t_segment;
-    _dim = p->dim;
+    // Assign params to private variables
+    _deg = p.deg;
+    _num_segments = p.num_segments;
+    _t_segment = p.t_segment;
+    _dim = p.dim;
 
     _num_ctrl_pts = _dim*_num_segments*(_deg+1);
     _ctrl_pts = VectorXd::Zero(_num_ctrl_pts);
@@ -145,12 +145,12 @@ std::vector<MatrixXd> BezierCurve::get_vec_input_sampling(Eigen::VectorXd t_samp
     // based on the t_samples, create the set of matrices that can sample all the derivatives
     // of the bezier curve, e.g. Phi.at(0) samples the position, Phi.at(1) samples the velocity
 
-    std::vector<MatrixXd> Phi;
+    std::vector<MatrixXd> Rho;
 
     for (int r = 0; r <= _deg; ++r)
-        Phi.push_back(get_mat_input_sampling(t_samples, r));
+        Rho.push_back(get_mat_input_sampling(t_samples, r));
 
-    return Phi;
+    return Rho;
 }
 
 MatrixXd BezierCurve::get_mat_input_sampling(Eigen::VectorXd t_samples, int r) {

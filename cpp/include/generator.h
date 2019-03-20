@@ -15,11 +15,25 @@ struct PhysLimits {
     Eigen::VectorXd amin;
 };
 
+struct TuningParams {
+    float s_free, s_obs, s_repel;
+    int spd_f, spd_o, spd_r;
+    double lin_coll, quad_coll;
+    Eigen::VectorXd energy_weights;
+};
+
+struct CollisionParams {
+    int order;
+    float rmin;
+    float c;
+};
+
 struct MpcParams {
     float h, Ts;
     int k_hor;
+    const TuningParams& tuning;
     const PhysLimits& limits;
-    Eigen::VectorXd energy_weights;
+    const CollisionParams coll;
 };
 
 class Generator {
@@ -28,6 +42,8 @@ public:
         const BezierCurve::Params& bezier_params;
         const DoubleIntegrator3D::Params& model_params;
         const MpcParams& mpc_params;
+        const Eigen::MatrixXd& po;
+        const Eigen::MatrixXd& pf;
     };
 
     Generator(const Generator::Params& p);
@@ -38,6 +54,11 @@ private:
     float _Ts;
     float _k_hor;
     int _l;
+    int _num_ctrl_pts;
+    int _dim;
+
+    Eigen::MatrixXd _po;
+    Eigen::MatrixXd _pf;
 
     BezierCurve _bezier;
     DoubleIntegrator3D _model_pred;
@@ -48,8 +69,14 @@ private:
     StatePropagator _Phi_pred;
     StatePropagator _Phi_exec;
 
+    // Matrices to minimize goal error
+    Eigen::MatrixXd _H_f;
+    Eigen::MatrixXd _H_o;
+    Eigen::MatrixXd _H_r;
+
     // Methods
-    void build_ineq_constr(const PhysLimits& lim, Constraint* ineq);
+    Constraint build_ineq_constr(const PhysLimits& lim);
+    void set_error_penalty_mats(const TuningParams& p, const Eigen::MatrixXd& pf);
 };
 
 #endif //ONLINE_PLANNING_GENERATOR_H

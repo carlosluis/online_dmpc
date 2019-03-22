@@ -10,35 +10,46 @@ load('sim_params.mat')
 load('mpc_params.mat')
 
 % Choose what data to visualize
-visualize = 0;      % 3D visualization of trajectory and predictions
-view_states = 1;    % pos, vel and acc of all agents
-view_distance = 1;  % inter-agent distance over time
+visualize = 1;      % 3D visualization of trajectory and predictions
+view_states = 0;    % pos, vel and acc of all agents
+view_distance = 0;  % inter-agent distance over time
 view_cost = 0;      % value of the replanning cost function
+global debug_constr;
+debug_constr = 0;
 
 % Disturbance applied to the model within a time frame
 disturbance = 0;       % activate the disturbance
 agent_disturb = [1];   % choose which agents to perturb
 disturbance_k = 1:100;  % timesteps to apply the perturbation
 
+% We will assume that all the rouge agents are labelled after the commanded agents
+
 % Number of vehicles in the problem
-N = 20;
+N = 30;
+N_rogues = 20;
+
+% Number of agents to be controlled by our algorithm
+N_cmd = N - N_rogues;
 
 % Generate a random set of initial and final positions
-[po, pf] = random_test(N, phys_limits.pmin, phys_limits.pmax, rmin + 0.2, E1, order);
+[po, pf] = random_test_static_rogues(N, N_cmd, phys_limits.pmin, phys_limits.pmax,...
+                                     rmin + 0.2, E1, order);
 
 % Initial positions
-po1 = [1.0, 1.0,1.0];
-po2 = [-1.0,-1.0,1.0];
-po3 = [-1.0,1.0,1.0];
-po4 = [1.0,-1.0,1.0];
-po = cat(3,po1,po2,po3,po4);
-
-% Final positions
-pf1 = [-1.0,-1.0,1.0];
-pf2 = [1.0,1.0,1.0];
-pf3 = [1.0,-1.0,1.0];
-pf4 = [-1.0,1.0,1.0];
-pf  = cat(3,pf1,pf2,pf3,pf4);
+% po1 = [1.01, 1.0,1.0];
+% po2 = [-1.0,-1.0,1.0];
+% po3 = [-1.0,1.0,1.0];
+% po4 = [1.0,-1.0,1.0];
+% po5 = [-0.2, 0.0, 1.0];
+% po6 = [0.2, 0.0, 1.0];
+% po = cat(3,po1,po2,po3,po4,po5,po6);
+% 
+% % Final positions
+% pf1 = [-1.0,-1.0,1.0];
+% pf2 = [1.0,1.0,1.0];
+% pf3 = [1.0,-1.0,1.0];
+% pf4 = [-1.0,1.0,1.0];
+% pf  = cat(3,pf1,pf2,pf3,pf4);
 
 %%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 
@@ -91,7 +102,7 @@ H_r = H_repel + H_snap;
 % The linear term of the cost function depends both on the goal location of
 % agent i and on its current position and velocity
 % We can construct the static part that depends on the desired location
-for i = 1:N
+for i = 1:N_cmd
     f_pf_free(:,:,i) = repmat((pf(:,:,i))', k_hor, 1)'*S_free*Phi;
     f_pf_obs(:,:,i) = repmat((pf(:,:,i))', k_hor, 1)'*S_obs*Phi;
 end
@@ -165,6 +176,7 @@ for i = 1:N
    voi = 0.001*ones(3, 1);
    X0(:,i) = [poi; voi];
    pos_k_i(:,1,i) = poi;
+   vel_k_i(:,1,i) = voi;
    pos_k_i_sample(:,1,i) = poi;
    X0_ref(:,:,i) = [poi, voi, zeros(3,1), zeros(3,1), zeros(3,1)];
    prev_state(:,i) = X0(:,i);
@@ -180,12 +192,14 @@ pred_X0 = X0;
 
 % Variables for reference replanning based on state feedback
 integ_err(:,1) = zeros(3, 1);
-
+colors = distinguishable_colors(N);
 tic
 %%%%%%%%%%%%%%% MPC MAIN LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 for k = 2:K
-    for i = 1:N 
+    
+    % Update states for the regular agents
+    for i = 1:N_cmd 
         % Compare the expected and sensed position at time k
         err_pos(:,k) = X0(1:3,i) - pred_X0(1:3,i);
         err_vel(:,k) = X0(4:6,i) - pred_X0(4:6,i);
@@ -264,8 +278,8 @@ for k = 2:K
         % Solve QP
         [x,exitflag] = softMPC_update(l,deg_poly, A_in_i, b_in_i, A_eq_i, H_i,...
                                       mat_f_x0_i,f_tot,f_eps, X0(:,i), X0_ref(:,:,i));
-        
-        assert(~(isempty(x) || exitflag == -2), 'ERROR: No solution - exitflag =  %i\n',exitflag);
+                                  
+%         assert(~(isempty(x) || exitflag == -2), 'ERROR: No solution - exitflag =  %i\n',exitflag);
         
         % Extract the control points
         x = x(1:size(mat_f_x0_free, 2));
@@ -273,6 +287,13 @@ for k = 2:K
         % Apply input to model starting form our previous init condition
         pos_i = vec2mat(Phi*x + A0.pos*X0(:,i),3)';
         vel_i = vec2mat(Phi_vel*x + A0.vel*X0(:,i),3)';
+        
+        if ~isempty(b_coll) && debug_constr
+            figure(1)
+            plot3(pos_i(1,:), pos_i(2,:), pos_i(3,:),...
+                  '*','Color',colors(i,:),'Linewidth',2)
+            plot3(pf(1,1,i),pf(1,2,i),pf(1,3,i),'s','Color',colors(i,:),'Linewidth',4,'markers',10)
+        end
         
         % Sample at a higher frequency the interval 0:Ts:h-Ts
         % This tells us what should be the value of our state after
@@ -332,18 +353,41 @@ for k = 2:K
         end
     end
     
+    % Update the states for the rogue agents
+    for  i = N_cmd + 1:N
+        % For now we're forcing the agents to remain in place
+        pos_k_i(:,k,i) = pos_k_i(:,k-1,i);
+        vel_k_i(:,k,i) = vel_k_i(:,k-1,i);
+        hor_rob_k(:,:,i) = repmat(X0(1:3, i), 1, k_hor + 1);
+    end
+
     hor_rob(:,:,:,k) = hor_rob_k;
 end
 toc
 
-%%%%%%%%%%%%% PLOT STATES AND REFERENCE TRAJECTORIES %%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Check if collision constraints were not violated
+for i = 1:N
+    for j = 1:N
+        if(i~=j)
+            differ = E1*(pos_k_i(:,:,i) - pos_k_i(:,:,j));
+            dist = (sum(differ.^order,1)).^(1/order);
+            if min(dist) < (rmin - 0.05)
+                [value,index] = min(dist);
+                fprintf("Collision violation by %.2fcm: vehicles %i and %i @ t = %.2fs \n",...
+                        (rmin -value)*100,i,j,index*h);
+            end
+        end
+    end
+end
+
+%% %%%%%%%%%%% PLOT STATES AND REFERENCE TRAJECTORIES %%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 state_label = {'x', 'y', 'z'};
 der_label = {'p', 'v', 'a', 'j', 's'};
-colors = distinguishable_colors(N);
+% colors = distinguishable_colors(N);
 
 if view_states
-    for i = 1:N
+    for i = 1:N_cmd
         % Position
         figure(1)
         subplot(3,1,1)
@@ -467,7 +511,7 @@ if view_states
     end
 end
 
-%%%%%%%%%%%% PLOT INTER-AGENT DISTANCES OVER TIME %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% %%%%%%%%%% PLOT INTER-AGENT DISTANCES OVER TIME %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if view_distance
     figure(6)
@@ -488,7 +532,7 @@ if view_distance
 end
 
 %% %%%%%%%%%%%% 3D VISUALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+[Xi, Yi, Zi] = sphere;
 if visualize
     figure(1)
     colors = distinguishable_colors(N);
@@ -499,7 +543,7 @@ if visualize
         h_line(i) = animatedline('LineWidth', 2, 'Color', colors(i,:), 'LineStyle', ':');
         end
         for k = 1:K
-            for i = 1:N
+            for i = 1:N_cmd
                 if k ~= 1
                     delete(h_pos(i))
                 end
@@ -517,6 +561,19 @@ if visualize
                 plot3(pf(1,1,i), pf(1,2,i), pf(1,3,i), 'x',...
                       'LineWidth', 2, 'Color', colors(i,:));   
             end
+            for i = N_cmd + 1: N
+                % Plot rouge agents sphere for better visualization
+                XX = Xi * rmin + pos_k_i(1,k,i);
+                YY = Yi * rmin + pos_k_i(2,k,i);
+                ZZ = Zi * rmin * c + pos_k_i(3,k,i);
+                surface(XX, YY, ZZ, 'Facealpha', 0.5, 'FaceColor',...
+                        [0.3,0.3,0.3], 'EdgeColor', [0,0,0]);
+                
+%                 plot3(pos_k_i(1,k,i), pos_k_i(2,k,i), pos_k_i(3,k,i), 'k*',...
+%                                  'LineWidth', 2, 'Markers', 12);
+            end
+            
+            
         drawnow
         end
         pause(0.5)

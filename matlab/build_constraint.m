@@ -6,8 +6,8 @@ K = size(A0,1) / 3;
 N_coll = sum(neighbours);
 Ain_k = zeros(N_coll, size(Phi,2));
 bin_k = zeros(N_coll, 1);
-k_ctr = k - 1;
-p_i = X0(1:3);
+k_ctr = k;
+p_i = hor_k(:,i);
 idx = 1;
 pf_tmp = [];
 if k_ctr == 0
@@ -17,6 +17,7 @@ end
 if k_ctr >= K
     k_ctr = K - 1;
 end
+% k_ctr
 
 % Loop through all the colliding neighbours and append the contraint tuple (A, b)
 for j = 1:N

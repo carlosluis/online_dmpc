@@ -10,8 +10,8 @@ cost_acc = .008;
 % s refers to cost and spd refers to the amount of time steps 
 % to include in the error minimization
 % Case 1: no collisions in the horizon - go fast
-s_free = 100;
-spd_f = 5;
+s_free = 1000;
+spd_f = 1;
 
 % Case 2: collisions in the horizon - go slower
 s_obs = 100;
@@ -22,8 +22,8 @@ s_repel = 1000;
 spd_r = 10;
 
 %%%%%%%%%% Collision relaxation penalty %%%%%%%%%%%%
-lin_coll_penalty = -1*10^8;
-quad_coll_penalty = 1*10^6;
+lin_coll_penalty = -5*10^4;
+quad_coll_penalty = 1*10^0;
 
 %%%%%%%%%% Tolerances to trigger a replan %%%%%%%%%%%%
 err_tol_pos = 0.05;         % tolerance between predicted and sensed pos

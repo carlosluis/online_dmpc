@@ -36,7 +36,7 @@ if (any(collisions)) && debug_constr
     clf
     for n=1:num_coll
        p1 = hor_k(:,i);
-       p2 = hor_k(:,viol_idx(i));
+       p2 = hor_k(:,viol_idx(n));
        diff = (p2 - p1);
        w = null(diff');
        new_p = p2 - E1^(-1)*diff/norm(diff)*rmin;
@@ -51,9 +51,9 @@ if (any(collisions)) && debug_constr
        zlim([-3,3])
 
        plot3(hor_rob(1,:,i),hor_rob(2,:,i),hor_rob(3,:,i),...
-           'o','Color',colors(n,:),'Linewidth',1)
-       plot3(p1(1),p1(2),p1(3),'o','Color',colors(n,:),'Linewidth',4);
-       plot3(p2(1),p2(2),p2(3),'o','Color',colors(viol_idx(i),:),'Linewidth',4);
+           'o','Color',colors(i,:),'Linewidth',1)
+       plot3(p1(1),p1(2),p1(3),'o','Color',colors(i,:),'Linewidth',4);
+       plot3(p2(1),p2(2),p2(3),'o','Color',colors(viol_idx(n),:),'Linewidth',4);
        plot3([p1(1) p2(1)], [p1(2) p2(2)], [p1(3) p2(3)])
     end
     

@@ -25,33 +25,33 @@ disturbance_k = 1:100;  % timesteps to apply the perturbation
 % We will assume that all the rouge agents are labelled after the commanded agents
 
 % Number of vehicles in the problem
-N = 2;
-N_rogues = 0;
+N = 6;
+N_rogues = 2;
 
 % Number of agents to be controlled by our algorithm
 N_cmd = N - N_rogues;
 
-pmin_gen = [-1.0,-1.0,0.2];
-pmax_gen = [1.0,1.0,2.0];
+pmin_gen = [-1.5,-1.5,0.2];
+pmax_gen = [1.5,1.5,2.0];
 
 % Generate a random set of initial and final positions
 % [po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin + 0.2, E1, order);
 
 % Initial positions
-po1 = [1.1, 1.0,1.0];
+po1 = [1.0, 1.0,1.0];
 po2 = [-1.0,-1.0,1.0];
 po3 = [-1.0,1.0,1.0];
 po4 = [1.0,-1.0,1.0];
 po5 = [-0.2, 0.0, 1.0];
 po6 = [0.2, 0.0, 1.0];
-po = cat(3,po1,po2);
+po = cat(3,po1,po2,po3,po4,po5,po6);
 % 
 % % Final positions
 pf1 = [-1.0,-1.0,1.0];
 pf2 = [1.0,1.0,1.0];
 pf3 = [1.0,-1.0,1.0];
 pf4 = [-1.0,1.0,1.0];
-pf  = cat(3,pf1,pf2);
+pf  = cat(3,pf1,pf2,pf3,pf4);
 
 %%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 
@@ -284,6 +284,7 @@ for k = 2:K
         assert(~isempty(x), 'ERROR: No solution found - exitflag =  %i\n',exitflag);
         
         % Extract the control points
+        epsilon = x(end);
         x = x(1:size(mat_f_x0_free, 2));
      
         % Apply input to model starting form our previous init condition
@@ -295,6 +296,8 @@ for k = 2:K
             plot3(pos_i(1,:), pos_i(2,:), pos_i(3,:),...
                   '*','Color',colors(i,:),'Linewidth',2)
             plot3(pf(1,1,i),pf(1,2,i),pf(1,3,i),'s','Color',colors(i,:),'Linewidth',4,'markers',10)
+            fprintf("relaxed constraint by %.2f cm\n", epsilon*100)
+            hola = 1;
         end
         
         % Sample at a higher frequency the interval 0:Ts:h-Ts
@@ -325,6 +328,8 @@ for k = 2:K
         if ~disturbance || ~ismember(k,disturbance_k) || ~ismember(i,agent_disturb)
             % Initial conditions for next MPC cycle - based on sensing
             X0(:,i) = X0_ex(:, end);
+            
+%             X0(:,i) = [pos_i(:,1); vel_i(:,1)];
 
             % Update agent's states at 1/h and 1/Ts frequencies
             pos_k_i_sample(:,cols,i) = X0_ex(1:3, 2:end);
@@ -341,6 +346,7 @@ for k = 2:K
         end
         
         pred_X0(:,i) = [pos_i_sample(:,end); vel_i_sample(:,end)];
+%         pred_X0(:,i) = X0(:,i);
         pos_k_i(:,k,i) = X0(1:3,i);
         vel_k_i(:,k,i) = X0(4:6,i);            
         
@@ -371,7 +377,7 @@ toc
 
 % Check if collision constraints were not violated
 violated = false;
-for i = 1:N
+for i = 1:N_cmd
     for j = 1:N
         if(i~=j)
             differ = E1*(pos_k_i(:,:,i) - pos_k_i(:,:,j));

@@ -25,31 +25,33 @@ disturbance_k = 1:100;  % timesteps to apply the perturbation
 % We will assume that all the rouge agents are labelled after the commanded agents
 
 % Number of vehicles in the problem
-N = 30;
-N_rogues = 20;
+N = 2;
+N_rogues = 0;
 
 % Number of agents to be controlled by our algorithm
 N_cmd = N - N_rogues;
 
+pmin_gen = [-1.0,-1.0,0.2];
+pmax_gen = [1.0,1.0,2.0];
+
 % Generate a random set of initial and final positions
-[po, pf] = random_test_static_rogues(N, N_cmd, phys_limits.pmin, phys_limits.pmax,...
-                                     rmin + 0.2, E1, order);
+% [po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin + 0.2, E1, order);
 
 % Initial positions
-% po1 = [1.01, 1.0,1.0];
-% po2 = [-1.0,-1.0,1.0];
-% po3 = [-1.0,1.0,1.0];
-% po4 = [1.0,-1.0,1.0];
-% po5 = [-0.2, 0.0, 1.0];
-% po6 = [0.2, 0.0, 1.0];
-% po = cat(3,po1,po2,po3,po4,po5,po6);
+po1 = [1.1, 1.0,1.0];
+po2 = [-1.0,-1.0,1.0];
+po3 = [-1.0,1.0,1.0];
+po4 = [1.0,-1.0,1.0];
+po5 = [-0.2, 0.0, 1.0];
+po6 = [0.2, 0.0, 1.0];
+po = cat(3,po1,po2);
 % 
 % % Final positions
-% pf1 = [-1.0,-1.0,1.0];
-% pf2 = [1.0,1.0,1.0];
-% pf3 = [1.0,-1.0,1.0];
-% pf4 = [-1.0,1.0,1.0];
-% pf  = cat(3,pf1,pf2,pf3,pf4);
+pf1 = [-1.0,-1.0,1.0];
+pf2 = [1.0,1.0,1.0];
+pf3 = [1.0,-1.0,1.0];
+pf4 = [-1.0,1.0,1.0];
+pf  = cat(3,pf1,pf2);
 
 %%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 
@@ -279,7 +281,7 @@ for k = 2:K
         [x,exitflag] = softMPC_update(l,deg_poly, A_in_i, b_in_i, A_eq_i, H_i,...
                                       mat_f_x0_i,f_tot,f_eps, X0(:,i), X0_ref(:,:,i));
                                   
-%         assert(~(isempty(x) || exitflag == -2), 'ERROR: No solution - exitflag =  %i\n',exitflag);
+        assert(~isempty(x), 'ERROR: No solution found - exitflag =  %i\n',exitflag);
         
         % Extract the control points
         x = x(1:size(mat_f_x0_free, 2));
@@ -365,19 +367,35 @@ for k = 2:K
 end
 toc
 
+%% POST-CHECK OF SOLUTION
+
 % Check if collision constraints were not violated
+violated = false;
 for i = 1:N
     for j = 1:N
         if(i~=j)
             differ = E1*(pos_k_i(:,:,i) - pos_k_i(:,:,j));
             dist = (sum(differ.^order,1)).^(1/order);
             if min(dist) < (rmin - 0.05)
+                violated = true;
                 [value,index] = min(dist);
                 fprintf("Collision violation by %.2fcm: vehicles %i and %i @ t = %.2fs \n",...
                         (rmin -value)*100,i,j,index*h);
             end
         end
     end
+end
+
+if ~violated
+    fprintf("No collisions during execution!\n");
+end
+    
+% Check if all vehicles reached their goals.
+pass = reached_goal(pos_k_i(:,:,1:N_cmd), pf, 0.1, N_cmd);
+if pass
+    fprintf("All agents reached their goals\n");
+else
+    fprintf("Some agents didn't reached their goals\n");
 end
 
 %% %%%%%%%%%%% PLOT STATES AND REFERENCE TRAJECTORIES %%%%%%%%%%%%%%%%%%%%%%%%%%%

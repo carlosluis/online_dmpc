@@ -1,16 +1,16 @@
-function [A_coll, b_coll] = BVC_constraints_ref(current_pos, d, i,rmin,order,E1,E2,x_length)
+function [A_coll, b_coll] = BVC_constraints_ref(X0_ref, d, i, rmin, order, E1, E2, x_length)
 
 % Construct the hyperspace constraints that will limit the first
 % segment of the Bezier curve to lie within the BVC.
 dh = d;
-N = size(current_pos,2);
-p_i = current_pos(:,i);
+N = size(X0_ref, 3);
+p_i = X0_ref(:, 1, i);
 idx = 1;
-A_coll = zeros(dh*(N-1),x_length);
-b_coll = zeros(dh*(N-1),1);
+A_coll = zeros(dh*(N-1), x_length);
+b_coll = zeros(dh*(N-1), 1);
 for j = 1:N
    if (i~= j)
-       p_j = current_pos(:,j);
+       p_j = X0_ref(:, 1, j);
        dist = norm(E1*(p_j-p_i),order);
        differ = (E2*(p_i-p_j).^(order-1))'; % Transpose of the difference
        
@@ -25,5 +25,4 @@ for j = 1:N
        end
        idx = idx + 1;
    end
-    
 end

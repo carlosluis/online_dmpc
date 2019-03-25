@@ -17,41 +17,43 @@ view_cost = 0;      % value of the replanning cost function
 global debug_constr;
 debug_constr = 0;
 
+use_ondemand = false;
+
 % Disturbance applied to the model within a time frame
 disturbance = 0;       % activate the disturbance
 agent_disturb = [1];   % choose which agents to perturb
-disturbance_k = 1:100;  % timesteps to apply the perturbation
+disturbance_k = 1:50;  % timesteps to apply the perturbation
 
-% We will assume that all the rouge agents are labelled after the commanded agents
+% We will assume that all the rogue agents are labelled after the commanded agents
 
 % Number of vehicles in the problem
-N = 6;
-N_rogues = 2;
+N = 2;
+N_rogues = 0;
 
 % Number of agents to be controlled by our algorithm
 N_cmd = N - N_rogues;
 
-pmin_gen = [-1.5,-1.5,0.2];
-pmax_gen = [1.5,1.5,2.0];
+pmin_gen = [-1.0,-1.0,0.2];
+pmax_gen = [1.0,1.0,2.0];
 
 % Generate a random set of initial and final positions
 % [po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin + 0.2, E1, order);
 
 % Initial positions
-po1 = [1.0, 1.0,1.0];
-po2 = [-1.0,-1.0,1.0];
+po1 = [0.0, 1.0,1.0];
+po2 = [0.1,-1.0,1.0];
 po3 = [-1.0,1.0,1.0];
 po4 = [1.0,-1.0,1.0];
-po5 = [-0.2, 0.0, 1.0];
-po6 = [0.2, 0.0, 1.0];
-po = cat(3,po1,po2,po3,po4,po5,po6);
+po5 = [-0.25, 0.0, 1.0];
+po6 = [0.25, 0.0, 1.0];
+po = cat(3,po1,po2,po5,po6);
 % 
 % % Final positions
-pf1 = [-1.0,-1.0,1.0];
-pf2 = [1.0,1.0,1.0];
+pf1 = [0.0,-1.0,1.0];
+pf2 = [0.0,1.0,1.0];
 pf3 = [1.0,-1.0,1.0];
 pf4 = [-1.0,1.0,1.0];
-pf  = cat(3,pf1,pf2,pf3,pf4);
+pf  = cat(3,pf1,pf2);
 
 %%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 
@@ -239,37 +241,50 @@ for k = 2:K
         end
               
         % Include on-demand collision avoidance
-        [A_coll, b_coll, pf_tmp] = ondemand_softconstraints(hor_rob(:,2:end,:,k-1), Phi,...
+        
+        if use_ondemand
+            [A_coll, b_coll, pf_tmp] = ondemand_softconstraints(hor_rob(:,2:end,:,k-1), Phi,...
                                                             X0(:,i), A0.pos, i, rmin,...
                                                             order, E1, E2);
 
-        if ~isempty(b_coll) % collisions in the horizon
-            % Include collision constraints and slack variables
-            N_v = length(b_coll) / 3;
-            A_in_i = [A_in zeros(size(A_in,1), N_v) ; A_coll];
-            b_in_i = [b_in; b_coll];
-            A_eq_i = [A_eq zeros(size(A_eq,1), N_v)];
-            
-            % Linear and quadratic term to penalize collision relaxation
-            f_eps = lin_coll_penalty*ones(1, N_v);
-            H_eps = quad_coll_penalty*eye(N_v);
-            
-            % If close to colliding, change setpoint to quickly react
-            if ~isempty(pf_tmp)
-                H_i = [H_r zeros(size(H_f,1), N_v);
-                       zeros(N_v, size(H_f,2)) H_eps];
-                mat_f_x0_i = mat_f_x0_repel;
-                f_tot = repmat((pf_tmp),k_hor,1)'*Rho_repel;
-            else
-                H_i = [H_o zeros(size(H_f,1), N_v);
-                       zeros(N_v,size(H_f,2)) H_eps];
-                mat_f_x0_i = mat_f_x0_obs;
-                f_tot = f_pf_obs(:,:,i);
+            if ~isempty(b_coll) % collisions in the horizon
+                % Include collision constraints and slack variables
+                N_v = length(b_coll) / 3;
+                A_in_i = [A_in zeros(size(A_in,1), N_v) ; A_coll];
+                b_in_i = [b_in; b_coll];
+                A_eq_i = [A_eq zeros(size(A_eq,1), N_v)];
+
+                % Linear and quadratic term to penalize collision relaxation
+                f_eps = lin_coll_penalty*ones(1, N_v);
+                H_eps = quad_coll_penalty*eye(N_v);
+
+                % If close to colliding, change setpoint to quickly react
+                if ~isempty(pf_tmp)
+                    H_i = [H_r zeros(size(H_f,1), N_v);
+                           zeros(N_v, size(H_f,2)) H_eps];
+                    mat_f_x0_i = mat_f_x0_repel;
+                    f_tot = repmat((pf_tmp),k_hor,1)'*Rho_repel;
+                else
+                    H_i = [H_o zeros(size(H_f,1), N_v);
+                           zeros(N_v,size(H_f,2)) H_eps];
+                    mat_f_x0_i = mat_f_x0_obs;
+                    f_tot = f_pf_obs(:,:,i);
+                end
+
+            else % no collisions in horizon
+                A_in_i = A_in;
+                b_in_i = b_in;
+                A_eq_i = A_eq;
+                H_i = H_f;
+                f_eps = [];
+                mat_f_x0_i = mat_f_x0_free;
+                f_tot = f_pf_free(:,:,i);
             end
-            
-        else % no collisions in horizon
-            A_in_i = A_in;
-            b_in_i = b_in;
+        else % Use BVC constraints
+            x_length = (d+1) * ndim * l;
+            [A_coll, b_coll] = BVC_constraints_ref(X0_ref, d, i, rmin, order, E1, E2, x_length);
+            A_in_i = [A_in; A_coll];
+            b_in_i = [b_in; b_coll];
             A_eq_i = A_eq;
             H_i = H_f;
             f_eps = [];
@@ -278,8 +293,8 @@ for k = 2:K
         end
         
         % Solve QP
-        [x,exitflag] = softMPC_update(l,deg_poly, A_in_i, b_in_i, A_eq_i, H_i,...
-                                      mat_f_x0_i,f_tot,f_eps, X0(:,i), X0_ref(:,:,i));
+        [x,exitflag] = softMPC_update(l, deg_poly, A_in_i, b_in_i, A_eq_i, H_i,...
+                                      mat_f_x0_i, f_tot, f_eps, X0(:,i), X0_ref(:,:,i));
                                   
         assert(~isempty(x), 'ERROR: No solution found - exitflag =  %i\n',exitflag);
         
@@ -291,7 +306,7 @@ for k = 2:K
         pos_i = vec2mat(Phi*x + A0.pos*X0(:,i),3)';
         vel_i = vec2mat(Phi_vel*x + A0.vel*X0(:,i),3)';
         
-        if ~isempty(b_coll) && debug_constr
+        if ~isempty(b_coll) && debug_constr && use_ondemand
             figure(1)
             plot3(pos_i(1,:), pos_i(2,:), pos_i(3,:),...
                   '*','Color',colors(i,:),'Linewidth',2)
@@ -329,8 +344,6 @@ for k = 2:K
             % Initial conditions for next MPC cycle - based on sensing
             X0(:,i) = X0_ex(:, end);
             
-%             X0(:,i) = [pos_i(:,1); vel_i(:,1)];
-
             % Update agent's states at 1/h and 1/Ts frequencies
             pos_k_i_sample(:,cols,i) = X0_ex(1:3, 2:end);
             vel_k_i_sample(:,cols,i) = X0_ex(4:6, 2:end);
@@ -346,7 +359,6 @@ for k = 2:K
         end
         
         pred_X0(:,i) = [pos_i_sample(:,end); vel_i_sample(:,end)];
-%         pred_X0(:,i) = X0(:,i);
         pos_k_i(:,k,i) = X0(1:3,i);
         vel_k_i(:,k,i) = X0(4:6,i);            
         
@@ -377,16 +389,21 @@ toc
 
 % Check if collision constraints were not violated
 violated = false;
+rmin_check = 0.35;
+c_check = 2;
+E_check = diag([1,1,c_check]);
+E1_check = E_check^(-1);
+
 for i = 1:N_cmd
     for j = 1:N
         if(i~=j)
-            differ = E1*(pos_k_i(:,:,i) - pos_k_i(:,:,j));
+            differ = E1_check*(pos_k_i(:,:,i) - pos_k_i(:,:,j));
             dist = (sum(differ.^order,1)).^(1/order);
-            if min(dist) < (rmin - 0.05)
+            if min(dist) < (rmin_check - 0.05)
                 violated = true;
                 [value,index] = min(dist);
                 fprintf("Collision violation by %.2fcm: vehicles %i and %i @ t = %.2fs \n",...
-                        (rmin -value)*100,i,j,index*h);
+                        (rmin_check -value)*100,i,j,index*h);
             end
         end
     end

@@ -3,7 +3,7 @@ function [A_coll, b_coll, pf_tmp] = ondemand_softconstraints(hor_rob, Phi, X0, A
 A_coll = [];
 b_coll = [];
 K = size(hor_rob, 2);
-relax_lim = 2;
+relax_lim = 20000;
 pf_tmp = [];
 % Detect first collision on the horizon and return constraint tuple
 for k = 1:K

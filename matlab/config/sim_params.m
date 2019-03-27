@@ -31,12 +31,12 @@ k_hor = 16;      % horizon length - duration of (k_hor-1)*h sec
 T_segment = 1.0; % fixed time length of each Bezier segment
 
 % Collision ellipsoid parameters
-order = 2;         % order of the ellipsoid - choose between 2 and 4
-rmin = 0.35;       % X-Y protection radius for collisions
-c = 2.0;           % Z radius is equal to rmin*c
-E = diag([1,1,c]); % scaling vector to compute distances to ellipsoid 
-E1 = E^(-1);
-E2 = E^(-order);
+order_a = 2;         % order of the ellipsoid - choose between 2 and 4
+rmin_a = 0.35;       % X-Y protection radius for collisions
+c_a = 2.0;           % Z radius is equal to rmin*c
+E_a = diag([1,1,c_a]); % scaling vector to compute distances to ellipsoid 
+E1_a = E_a^(-1);
+E2_a = E_a^(-order_a);
 
 % Bezier curve parameters. Note that d > deg_poly always
 deg_poly = 3;  % degree of differentiability required for the position
@@ -44,8 +44,8 @@ l = 3;         % number of Bezier curves to concatenate
 d = 5;         % degree of the bezier curve
 
 % Physical limits of the robot - position and acceleration bounds
-phys_limits.pmin = [-1.5,-1.5,0.2];
-phys_limits.pmax = [1.5,1.5,2.2];
+phys_limits.pmin = [-1.5,-1.5,0.95];
+phys_limits.pmax = [1.5,1.5,1.05];
 phys_limits.amax = 1;
 phys_limits.amin = -1;
 

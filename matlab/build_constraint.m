@@ -23,18 +23,18 @@ end
 for j = 1:N
    if (i~= j && neighbours(j))
        p_j = hor_k(:,j);
-       dist = norm(E1*(p_i-p_j), order);
-       differ = (E2*(p_i-p_j).^(order-1))'; 
-       prev_dist(idx) = dist^(order-1);
+       dist = norm(E1(:,:,j)*(p_i-p_j), order(j));
+       differ = (E2(:,:,j)*(p_i-p_j).^(order(j)-1))'; 
+       prev_dist(idx) = dist^(order(j)-1);
        
-       if k_ctr <=1 && dist < rmin-0.05
+       if k_ctr <=1 && dist < rmin(j)-0.05
            % We're almost crashing, force agents to repel each other
-           pf_tmp = p_i + (p_i-p_j)*(rmin+0.1 -dist)/dist;
+           pf_tmp = p_i + (p_i-p_j)*(rmin(j)+0.1 -dist)/dist;
        end
        
        % Build intermediate terms for matrices
        init_cond = differ * A0(3 *(k_ctr-1) + 1 : 3*k_ctr, :)*X0;
-       zeta = dist^(order-1)*(rmin - dist);
+       zeta = dist^(order(j)-1)*(rmin(j) - dist);
        rho = zeta + differ*p_i - init_cond;
        diff_mat = [zeros(1, 3*(k_ctr-1)) differ zeros(1, 3*(K-k_ctr))];
        

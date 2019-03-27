@@ -10,14 +10,14 @@ load('sim_params.mat')
 load('mpc_params.mat')
 
 % Choose what data to visualize
-visualize = 1;      % 3D visualization of trajectory and predictions
+visualize = 0;      % 3D visualization of trajectory and predictions
 view_states = 0;    % pos, vel and acc of all agents
 view_distance = 0;  % inter-agent distance over time
 view_cost = 0;      % value of the replanning cost function
 global debug_constr;
 debug_constr = 0;
 
-use_ondemand = false;
+use_ondemand = true;
 
 % Disturbance applied to the model within a time frame
 disturbance = 0;       % activate the disturbance
@@ -26,12 +26,38 @@ disturbance_k = 1:50;  % timesteps to apply the perturbation
 
 % We will assume that all the rogue agents are labelled after the commanded agents
 
+
 % Number of vehicles in the problem
-N = 2;
-N_rogues = 0;
+N = 7;
+N_rogues = 1;
+
+% Specify a specific size for rogue agents
+order_r = 2;
+rmin_r = 0.75;
+c_r = 2.0;
+E_r = diag([1,1.0,c_r]);
+E1_r = E_r^(-1);
+E2_r = E_r^(-order_r);
 
 % Number of agents to be controlled by our algorithm
 N_cmd = N - N_rogues;
+
+for i = 1:N
+    if i <= N_cmd
+        order(i) = order_a;
+        rmin(i) = rmin_a;
+        c(i) = c_a;
+        E1(:,:,i) = E1_a;
+        E2(:,:,i) = E2_a;
+    else
+        order(i) = order_r;
+        rmin(i) = rmin_r;
+        c(i) = c_r;
+        E1(:,:,i) = E1_r;
+        E2(:,:,i) = E2_r;
+        
+    end
+end
 
 pmin_gen = [-1.0,-1.0,0.2];
 pmax_gen = [1.0,1.0,2.0];
@@ -40,20 +66,23 @@ pmax_gen = [1.0,1.0,2.0];
 % [po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin + 0.2, E1, order);
 
 % Initial positions
-po1 = [0.0, 1.0,1.0];
-po2 = [0.1,-1.0,1.0];
+po1 = [1.0, 1.0,1.0];
+po2 = [-1.0,-1.0,1.0];
 po3 = [-1.0,1.0,1.0];
 po4 = [1.0,-1.0,1.0];
-po5 = [-0.25, 0.0, 1.0];
-po6 = [0.25, 0.0, 1.0];
-po = cat(3,po1,po2,po5,po6);
+po5 = [1.0, 0.0, 1.0];
+po6 = [-1.0, 0.0, 1.0];
+po7 = [-0.0, 0.0, 1.0];
+po = cat(3,po1,po2,po3,po4,po5,po6,po7);
 % 
 % % Final positions
-pf1 = [0.0,-1.0,1.0];
-pf2 = [0.0,1.0,1.0];
+pf1 = [-1.0,-1.0,1.0];
+pf2 = [1.0,1.0,1.0];
 pf3 = [1.0,-1.0,1.0];
 pf4 = [-1.0,1.0,1.0];
-pf  = cat(3,pf1,pf2);
+pf5 = [-1.0, 0.0, 1.0];
+pf6 = [1.0, 0.0, 1.0];
+pf  = cat(3,pf1,pf2,pf3,pf4,pf5,pf6);
 
 %%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 
@@ -237,7 +266,7 @@ for k = 2:K
             X0_ref(:,3:5,i) = zeros(3,3);
             trigger(k,i) = 1;
         else
-            X0_ref(:,1,i) = X0_ref(:,1,i) + err_pos(:,k) + ki*integ_err(:,k);
+            X0_ref(:,1,i) = X0_ref(:,1,i); %+ err_pos(:,k) + ki*integ_err(:,k);
         end
               
         % Include on-demand collision avoidance
@@ -372,7 +401,7 @@ for k = 2:K
             hor_rob_k(:,:,i) = [X0(1:3,i) pos_i(:,1:end)];
         end
     end
-    
+  
     % Update the states for the rogue agents
     for  i = N_cmd + 1:N
         % For now we're forcing the agents to remain in place
@@ -397,13 +426,13 @@ E1_check = E_check^(-1);
 for i = 1:N_cmd
     for j = 1:N
         if(i~=j)
-            differ = E1_check*(pos_k_i(:,:,i) - pos_k_i(:,:,j));
-            dist = (sum(differ.^order,1)).^(1/order);
-            if min(dist) < (rmin_check - 0.05)
+            differ = E1(:,:,j)*(pos_k_i(:,:,i) - pos_k_i(:,:,j));
+            dist = (sum(differ.^order(j),1)).^(1/order(j));
+            if min(dist) < (rmin(j) - 0.05)
                 violated = true;
                 [value,index] = min(dist);
                 fprintf("Collision violation by %.2fcm: vehicles %i and %i @ t = %.2fs \n",...
-                        (rmin_check -value)*100,i,j,index*h);
+                        (rmin(j) -value)*100,i,j,index*h);
             end
         end
     end
@@ -414,7 +443,7 @@ if ~violated
 end
     
 % Check if all vehicles reached their goals.
-pass = reached_goal(pos_k_i(:,:,1:N_cmd), pf, 0.1, N_cmd);
+pass = reached_goal(pos_k_i(:,:,1:N_cmd), pf, 0.15, N_cmd);
 if pass
     fprintf("All agents reached their goals\n");
 else
@@ -594,7 +623,7 @@ if visualize
                 grid on;
                 xlim([phys_limits.pmin(1), phys_limits.pmax(1)])
                 ylim([phys_limits.pmin(2), phys_limits.pmax(2)])
-                zlim([0, phys_limits.pmax(3)])
+                zlim([0, phys_limits.pmax(3)+1.0])
                 h_pos(i) = plot3(pos_k_i(1,k,i), pos_k_i(2,k,i), pos_k_i(3,k,i), 'o',...
                                  'LineWidth', 2, 'Color',colors(i,:));
                 plot3(po(1,1,i), po(1,2,i), po(1,3,i), '^',...
@@ -604,9 +633,9 @@ if visualize
             end
             for i = N_cmd + 1: N
                 % Plot rouge agents sphere for better visualization
-                XX = Xi * rmin + pos_k_i(1,k,i);
-                YY = Yi * rmin + pos_k_i(2,k,i);
-                ZZ = Zi * rmin * c + pos_k_i(3,k,i);
+                XX = Xi * rmin(i) + pos_k_i(1,k,i);
+                YY = Yi * rmin(i) + pos_k_i(2,k,i);
+                ZZ = Zi * rmin(i) * c(i) + pos_k_i(3,k,i);
                 surface(XX, YY, ZZ, 'Facealpha', 0.5, 'FaceColor',...
                         [0.3,0.3,0.3], 'EdgeColor', [0,0,0]);
                 

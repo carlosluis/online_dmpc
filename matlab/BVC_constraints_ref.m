@@ -11,11 +11,11 @@ b_coll = zeros(dh*(N-1), 1);
 for j = 1:N
    if (i~= j)
        p_j = X0_ref(:, 1, j);
-       dist = norm(E1*(p_j-p_i),order);
-       differ = (E2*(p_i-p_j).^(order-1))'; % Transpose of the difference
+       dist = norm(E1(:,:,j)*(p_j-p_i),order(j));
+       differ = (E2(:,:,j)*(p_i-p_j).^(order(j)-1))'; % Transpose of the difference
        
        % Right side of inequality constraint
-       r = dist^(order-1)*((rmin/2+dist/2) - dist + differ*p_i/(dist^(order-1)));
+       r = dist^(order(j)-1)*((rmin(j)/2+dist/2) - dist + differ*p_i/(dist^(order(j)-1)));
        
        % the diff 1x3 vector must multiply all the control points of the
        % first segment of the Bezier curve, except the first one

@@ -12,10 +12,10 @@ while(~pass)
         pass = false;
         while(~pass && tries <= max_iter)
             candidate = (pmin + (pmax-pmin).*rand(1,3))';
-            diff = E1*(po - candidate);
-            dist = (sum(diff.^order,1)).^(1 / order);
+            diff = E1(:,:,n)*(po - candidate);
+            dist = (sum(diff.^order(n),1)).^(1 / order(n));
 
-            if(dist > rmin)
+            if(dist > rmin(n))
                 po(:,n) = candidate;
                 pass = true;   
             end
@@ -40,10 +40,10 @@ while(~pass)
         pass = false;
         while(~pass && tries <= max_iter)
             candidate = (pmin + (pmax-pmin).*rand(1,3))';
-            diff = E1*(pf - candidate);
-            dist = (sum(diff.^order,1)).^(1/order);
+            diff = E1(:,:,n)*(pf - candidate);
+            dist = (sum(diff.^order(n),1)).^(1/order(n));
 
-            if(dist > rmin)
+            if(dist > rmin(n))
                 pf(:,n) = candidate;
                 pass = true;   
             end

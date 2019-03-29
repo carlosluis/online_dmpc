@@ -1,5 +1,7 @@
-function [A_coll, b_coll, pf_tmp] = ondemand_softconstraints(hor_rob, Phi, X0, A0, i,...
+function [A_coll, b_coll, pf_tmp, t_elapsed] = ondemand_softconstraints(hor_rob, Phi, X0, A0, i,...
                                                              rmin, order, E1, E2)
+                                                         
+t_start = tic;
 A_coll = [];
 b_coll = [];
 K = size(hor_rob, 2);
@@ -9,6 +11,7 @@ pf_tmp = [];
 for k = 1:K
     hor_k = squeeze(hor_rob(:,k,:));
     [collisions, neighbrs] = check_horizon(hor_k, i, E1, rmin, order); 
+    
     if (any(collisions))
         k_ctr = k;
         N_v = sum(neighbrs);
@@ -22,8 +25,11 @@ for k = 1:K
 
         b_coll = [b_coll; zeros(N_v, 1); relax_lim*ones(N_v, 1)];
         break;
-    end
+    end  
 end
+
+t_elapsed = toc(t_start);
+% fprintf("check horizon time = %.2f ms\n", t_elapsed*1000)
 
 colors = distinguishable_colors(2);
 global debug_constr;

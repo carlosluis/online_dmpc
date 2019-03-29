@@ -17,7 +17,7 @@ view_cost = 0;      % value of the replanning cost function
 global debug_constr;
 debug_constr = 0;
 
-use_ondemand = true;
+use_ondemand = false;
 
 % Disturbance applied to the model within a time frame
 disturbance = 0;       % activate the disturbance
@@ -26,16 +26,15 @@ disturbance_k = 1:50;  % timesteps to apply the perturbation
 
 % We will assume that all the rogue agents are labelled after the commanded agents
 
-
 % Number of vehicles in the problem
-N = 7;
-N_rogues = 1;
+N = 16;
+N_rogues = 0;
 
 % Specify a specific size for rogue agents
 order_r = 2;
 rmin_r = 0.75;
-c_r = 2.0;
-E_r = diag([1,1.0,c_r]);
+c_r = [1.0, 1.0, 2.0];
+E_r = diag(c_r);
 E1_r = E_r^(-1);
 E2_r = E_r^(-order_r);
 
@@ -46,43 +45,43 @@ for i = 1:N
     if i <= N_cmd
         order(i) = order_a;
         rmin(i) = rmin_a;
-        c(i) = c_a;
+        c(i,:) = c_a;
         E1(:,:,i) = E1_a;
         E2(:,:,i) = E2_a;
     else
         order(i) = order_r;
         rmin(i) = rmin_r;
-        c(i) = c_r;
+        c(i,:) = c_r;
         E1(:,:,i) = E1_r;
         E2(:,:,i) = E2_r;
         
     end
 end
 
-pmin_gen = [-1.0,-1.0,0.2];
-pmax_gen = [1.0,1.0,2.0];
+pmin_gen = [-2.0,-2.0,0.2];
+pmax_gen = [2.0,2.0,2.0];
 
 % Generate a random set of initial and final positions
-% [po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin + 0.2, E1, order);
+[po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin + 0.2, E1, order);
 
 % Initial positions
-po1 = [1.0, 1.0,1.0];
-po2 = [-1.0,-1.0,1.0];
-po3 = [-1.0,1.0,1.0];
-po4 = [1.0,-1.0,1.0];
-po5 = [1.0, 0.0, 1.0];
-po6 = [-1.0, 0.0, 1.0];
-po7 = [-0.0, 0.0, 1.0];
-po = cat(3,po1,po2,po3,po4,po5,po6,po7);
-% 
-% % Final positions
-pf1 = [-1.0,-1.0,1.0];
-pf2 = [1.0,1.0,1.0];
-pf3 = [1.0,-1.0,1.0];
-pf4 = [-1.0,1.0,1.0];
-pf5 = [-1.0, 0.0, 1.0];
-pf6 = [1.0, 0.0, 1.0];
-pf  = cat(3,pf1,pf2,pf3,pf4,pf5,pf6);
+% po1 = [1.0, 1.0,1.0];
+% po2 = [-1.0,-1.0,1.0];
+% po3 = [-1.0,1.0,1.0];
+% po4 = [1.0,-1.0,1.0];
+% po5 = [1.0, 0.0, 1.0];
+% po6 = [-1.0, 0.0, 1.0];
+% po7 = [-0.0, 0.0, 1.0];
+% po = cat(3,po1,po2,po7,po4,po5,po6,po7);
+% % 
+% % % Final positions
+% pf1 = [-1.0,-1.0,1.0];
+% pf2 = [1.0,1.0,1.0];
+% pf3 = [1.0,-1.0,1.0];
+% pf4 = [-1.0,1.0,1.0];
+% pf5 = [-1.0, 0.0, 1.0];
+% pf6 = [1.0, 0.0, 1.0];
+% pf  = cat(3,pf1,pf2);
 
 %%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 
@@ -227,8 +226,9 @@ pred_X0 = X0;
 integ_err(:,1) = zeros(3, 1);
 colors = distinguishable_colors(N);
 tic
-%%%%%%%%%%%%%%% MPC MAIN LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+%% %%%%%%%%%%%%% MPC MAIN LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% t_build = zeros(K, N_cmd);
+% t_qp = zeros(K, N_cmd);
 for k = 2:K
     
     % Update states for the regular agents
@@ -272,7 +272,7 @@ for k = 2:K
         % Include on-demand collision avoidance
         
         if use_ondemand
-            [A_coll, b_coll, pf_tmp] = ondemand_softconstraints(hor_rob(:,2:end,:,k-1), Phi,...
+            [A_coll, b_coll, pf_tmp, t_build(k,i)] = ondemand_softconstraints(hor_rob(:,2:end,:,k-1), Phi,...
                                                             X0(:,i), A0.pos, i, rmin,...
                                                             order, E1, E2);
 
@@ -311,7 +311,9 @@ for k = 2:K
             end
         else % Use BVC constraints
             x_length = (d+1) * ndim * l;
+            t_start = tic;
             [A_coll, b_coll] = BVC_constraints_ref(X0_ref, d, i, rmin, order, E1, E2, x_length);
+            t_build(k,i) = toc(t_start);
             A_in_i = [A_in; A_coll];
             b_in_i = [b_in; b_coll];
             A_eq_i = A_eq;
@@ -322,18 +324,26 @@ for k = 2:K
         end
         
         % Solve QP
-        [x,exitflag] = softMPC_update(l, deg_poly, A_in_i, b_in_i, A_eq_i, H_i,...
+        t_start = tic;
+        [sol, exitflag] = softMPC_update(l, deg_poly, A_in_i, b_in_i, A_eq_i, H_i,...
                                       mat_f_x0_i, f_tot, f_eps, X0(:,i), X0_ref(:,:,i));
                                   
-        assert(~isempty(x), 'ERROR: No solution found - exitflag =  %i\n',exitflag);
+        t_qp(k,i) = toc(t_start);  
+        if  isempty(sol)
+            fprintf("No solution found, using previous input \n")
+            x = prev_x{i};
+%             assert(~isempty(x), 'ERROR: No solution found - exitflag =  %i\n',exitflag);
+        else
+            prev_x{i} = sol;
+            x = sol;
+        end
         
         % Extract the control points
-        epsilon = x(end);
-        x = x(1:size(mat_f_x0_free, 2));
+        u = x(1:size(mat_f_x0_free, 2));
      
         % Apply input to model starting form our previous init condition
-        pos_i = vec2mat(Phi*x + A0.pos*X0(:,i),3)';
-        vel_i = vec2mat(Phi_vel*x + A0.vel*X0(:,i),3)';
+        pos_i = vec2mat(Phi*u + A0.pos*X0(:,i),3)';
+        vel_i = vec2mat(Phi_vel*u + A0.vel*X0(:,i),3)';
         
         if ~isempty(b_coll) && debug_constr && use_ondemand
             figure(1)
@@ -347,15 +357,15 @@ for k = 2:K
         % Sample at a higher frequency the interval 0:Ts:h-Ts
         % This tells us what should be the value of our state after
         % sending the optimal commands if the model was perfect
-        pos_i_sample = vec2mat(Phi_sample*x + A0_s.pos*X0(:,i),3)';
-        vel_i_sample = vec2mat(Phi_vel_sample*x + A0_s.vel*X0(:,i),3)';
+        pos_i_sample = vec2mat(Phi_sample*u + A0_s.pos*X0(:,i),3)';
+        vel_i_sample = vec2mat(Phi_vel_sample*u + A0_s.vel*X0(:,i),3)';
         
         % Sample the resulting reference Bezier curves at 1/h and 1/Ts
         % Get the next input to be applied 'X0_ref'
         cols = 2 + (k-2)*(h/Ts):1 + (k-1)*(h/Ts);
         for r = 1:d+1
-            rth_ref(:,:,r) = vec2mat(Der_h{r}*x, 3)';
-            rth_ref_sample(:,:,r) = vec2mat(Der_ts{r}*x, 3)';
+            rth_ref(:,:,r) = vec2mat(Der_h{r}*u, 3)';
+            rth_ref_sample(:,:,r) = vec2mat(Der_ts{r}*u, 3)';
             X0_ref(:,r,i) = rth_ref(:,2,r);
             ref(:,k,r,i) = rth_ref(:,2,r);
             ref_sample(:,cols,r,i) = rth_ref_sample(:,:,r);
@@ -443,12 +453,17 @@ if ~violated
 end
     
 % Check if all vehicles reached their goals.
-pass = reached_goal(pos_k_i(:,:,1:N_cmd), pf, 0.15, N_cmd);
+pass = reached_goal(pos_k_i(:,:,1:N_cmd), pf, 0.1, N_cmd);
 if pass
     fprintf("All agents reached their goals\n");
 else
     fprintf("Some agents didn't reached their goals\n");
 end
+
+% Print average building time and qp solving time for each agent
+fprintf("Average collision constraint building time = %.2f ms\n", 1000*mean2(t_build(3:end,:)));
+fprintf("Average QP solving time = %.2f ms\n", 1000*mean2(t_qp(3:end,:)));
+
 
 %% %%%%%%%%%%% PLOT STATES AND REFERENCE TRAJECTORIES %%%%%%%%%%%%%%%%%%%%%%%%%%%
 

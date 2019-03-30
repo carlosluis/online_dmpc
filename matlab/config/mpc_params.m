@@ -11,7 +11,7 @@ cost_acc = .008;
 % to include in the error minimization
 % Case 1: no collisions in the horizon - go fast
 s_free = 100;
-spd_f = 1;
+spd_f = 3;
 
 % Case 2: collisions in the horizon - go slower
 s_obs = 100;
@@ -22,7 +22,7 @@ s_repel = 1000;
 spd_r = 10;
 
 %%%%%%%%%% Collision relaxation penalty %%%%%%%%%%%%
-lin_coll_penalty = -1*10^6;
+lin_coll_penalty = -1*10^5;
 quad_coll_penalty = 1*10^0;
 
 %%%%%%%%%% Tolerances to trigger a replan %%%%%%%%%%%%

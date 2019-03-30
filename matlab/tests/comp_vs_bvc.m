@@ -14,8 +14,8 @@ global debug_constr;
 debug_constr = 0;
 
 % Testing parameters
-N_vector = [2 4 8 16 32];
-trials = 30;
+N_vector = [5 10 15 20 25 30];
+trials = 50;
 
 for i = 1:N_vector(end)
     order(i) = order_a;
@@ -27,8 +27,8 @@ end
 
 build_all_matrices;
 
-pmin_gen = [-1.0,-1.0, 0.2];
-pmax_gen = [1.0, 1.0, 2.2];
+pmin_gen = [-1.5,-1.5, 0.2];
+pmax_gen = [1.5, 1.5, 2.2];
 
 % Start Test
 for p = 1:length(N_vector)
@@ -108,7 +108,7 @@ for p = 1:length(N_vector)
     end    
 end
 fprintf("Finished! \n")
-save('comp_bvc')
+save('comp_bvc5')
 
 %% Post Processing
 
@@ -138,7 +138,7 @@ plot(N_vector, tbuild_dmpc, '--r', 'Linewidth', 2);
 plot(N_vector, tqp_bvc, 'b', 'Linewidth', 2);
 plot(N_vector, tbuild_bvc, '--b', 'Linewidth', 2);
 xlabel('Number of agents');
-ylabel('Success Probability');
+ylabel('Computation Time per Agent [ms]');
 legend('On-demand solve QP', 'On-demand build constr', 'BVC solve QP', 'BVC build constr')
 
 % Completion time

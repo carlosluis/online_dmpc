@@ -11,23 +11,23 @@ load('mpc_params.mat')
 
 % Choose what data to visualize
 visualize = 0;      % 3D visualization of trajectory and predictions
-view_states = 0;    % pos, vel and acc of all agents
+view_states = 1;    % pos, vel and acc of all agents
 view_distance = 0;  % inter-agent distance over time
 view_cost = 0;      % value of the replanning cost function
 global debug_constr;
 debug_constr = 0;
 
-use_ondemand = false;
+use_ondemand = true;
 
 % Disturbance applied to the model within a time frame
-disturbance = 0;       % activate the disturbance
+disturbance = 1;       % activate the disturbance
 agent_disturb = [1];   % choose which agents to perturb
-disturbance_k = 1:50;  % timesteps to apply the perturbation
+disturbance_k = [1:20, 50:70];  % timesteps to apply the perturbation
 
 % We will assume that all the rogue agents are labelled after the commanded agents
 
 % Number of vehicles in the problem
-N = 16;
+N = 1;
 N_rogues = 0;
 
 % Specify a specific size for rogue agents
@@ -58,30 +58,30 @@ for i = 1:N
     end
 end
 
-pmin_gen = [-2.0,-2.0,0.2];
-pmax_gen = [2.0,2.0,2.0];
+pmin_gen = [-1.5,-1.5,0.2];
+pmax_gen = [1.5,1.5,2.2];
 
 % Generate a random set of initial and final positions
-[po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin + 0.2, E1, order);
+% [po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin, E1, order);
 
 % Initial positions
-% po1 = [1.0, 1.0,1.0];
-% po2 = [-1.0,-1.0,1.0];
-% po3 = [-1.0,1.0,1.0];
-% po4 = [1.0,-1.0,1.0];
-% po5 = [1.0, 0.0, 1.0];
-% po6 = [-1.0, 0.0, 1.0];
-% po7 = [-0.0, 0.0, 1.0];
-% po = cat(3,po1,po2,po7,po4,po5,po6,po7);
-% % 
-% % % Final positions
-% pf1 = [-1.0,-1.0,1.0];
-% pf2 = [1.0,1.0,1.0];
-% pf3 = [1.0,-1.0,1.0];
-% pf4 = [-1.0,1.0,1.0];
-% pf5 = [-1.0, 0.0, 1.0];
-% pf6 = [1.0, 0.0, 1.0];
-% pf  = cat(3,pf1,pf2);
+po1 = [0.0, 1.0,1.0];
+po2 = [-1.0,-1.0,1.0];
+po3 = [-1.0,1.0,1.0];
+po4 = [1.0,-1.0,1.0];
+po5 = [1.0, 0.0, 1.0];
+po6 = [-1.0, 0.0, 1.0];
+po7 = [-0.0, 0.0, 1.0];
+po = cat(3,po1,po2,po7,po4,po5,po6,po7);
+% 
+% % Final positions
+pf1 = [1.0, 1.0,1.0];
+pf2 = [1.0,1.0,1.0];
+pf3 = [1.0,-1.0,1.0];
+pf4 = [-1.0,1.0,1.0];
+pf5 = [-1.0, 0.0, 1.0];
+pf6 = [1.0, 0.0, 1.0];
+pf  = cat(3,pf1);
 
 %%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 
@@ -201,7 +201,7 @@ Tau_r = mat_sample_poly(T_segment, t_sample_r, d, l);
 Phi_sample = Lambda_s.pos*Tau_r*Beta;
 Phi_vel_sample = Lambda_s.vel*Tau_r*Beta;
 
-%%%%%%%%%%%%%%%% INIT ALGORITHM %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% %%%%%%%%%%%%%% INIT ALGORITHM %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 for i = 1:N
    poi = po(:,:,i)';
@@ -210,7 +210,7 @@ for i = 1:N
    pos_k_i(:,1,i) = poi;
    vel_k_i(:,1,i) = voi;
    pos_k_i_sample(:,1,i) = poi;
-   X0_ref(:,:,i) = [poi, voi, zeros(3,1), zeros(3,1), zeros(3,1)];
+   X0_ref(:,:,i) = [poi, voi, zeros(3,d-1)];
    prev_state(:,i) = X0(:,i);
    for r = 1:deg_poly+1
       ref(:,1,r,i) = X0_ref(:,r,i); 
@@ -389,8 +389,14 @@ for k = 2:K
             
         elseif disturbance && ismember(k,disturbance_k) && ismember(i,agent_disturb)
             % Apply simulated disturbance
-            X0(1,i) = X0(1,i);
-            X0(4,i) = 0;
+            if k <= 30
+                X0(1,i) = X0(1,i);
+                X0(4,i) = 0;
+            elseif k >= 50
+                X0(1,i) = X0(1,i) - 0.05;
+                X0(4,i) = -0.25;
+            end
+                
             X0(:,i) = X0(:,i) + rnd_noise(std_p,std_v);
             prev_state(:,i) = X0(:,i);
             pos_k_i_sample(:,cols,i) = repmat(X0(1:3,i),1,h/Ts);
@@ -428,17 +434,17 @@ toc
 
 % Check if collision constraints were not violated
 violated = false;
-rmin_check = 0.35;
-c_check = 2;
+rmin_check = 0.15;
+c_check = 3;
 E_check = diag([1,1,c_check]);
 E1_check = E_check^(-1);
 
 for i = 1:N_cmd
     for j = 1:N
         if(i~=j)
-            differ = E1(:,:,j)*(pos_k_i(:,:,i) - pos_k_i(:,:,j));
+            differ = E1_check*(pos_k_i(:,:,i) - pos_k_i(:,:,j));
             dist = (sum(differ.^order(j),1)).^(1/order(j));
-            if min(dist) < (rmin(j) - 0.05)
+            if min(dist) < rmin_check
                 violated = true;
                 [value,index] = min(dist);
                 fprintf("Collision violation by %.2fcm: vehicles %i and %i @ t = %.2fs \n",...

@@ -84,19 +84,19 @@ set(gcf,'color','w');
 %% FOR 2D FIGURE
 figure(2)
 [x,y,z] = meshgrid(-1:0.01:1);
-set(gca,'LineWidth',2,'TickLength',[0.025 0.025]);
+set(gca,'LineWidth',1.5,'TickLength',[0.025 0.025]);
 set(gca,'FontSize',20)
 hold on;
 for i = 1:N_cmd
     h_pos(i) = plot(pos_k_i(1,:,i), pos_k_i(2,:,i),...
-                             'LineWidth', 5, 'Color',colors(i,:));
+                             'LineWidth', 3, 'Color',colors(i,:));
     xlim([-1.2, 1.2])
     ylim([-1.2, 1.2])    
 
 end
 for i = 1:N_cmd
     h = plot(po(1,1,i), po(1,2,i), '^',...
-                  'LineWidth', 5, 'Color', colors(i,:),'Markers',12); 
+                  'LineWidth', 5, 'Color', colors(i,:),'Markers',15); 
 end
 
 for i = N_cmd + 1: N
@@ -108,8 +108,8 @@ for i = N_cmd + 1: N
 
 end
 box on;
-ax = gca;
-ax.LineWidth = 5;
+% ax = gca;
+% ax.LineWidth = 1.2;
 xticks([-1  1]);
 yticks([-1  1]);
 zticks([0  2]);

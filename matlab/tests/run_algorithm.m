@@ -28,6 +28,7 @@ integ_err(:,1) = zeros(3, 1);
 %%%%%%%%%%%%%%% MPC MAIN LOOP %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % t_build = zeros(K, N_cmd);
 % t_qp = zeros(K, N_cmd);
+num_repels = zeros(N,1);
 for k = 2:K
     
     % Update states for the regular agents
@@ -87,7 +88,8 @@ for k = 2:K
                 H_eps = quad_coll_penalty*eye(N_v);
 
                 % If close to colliding, change setpoint to quickly react
-                if ~isempty(pf_tmp)
+                if ~isempty(pf_tmp) && use_repel
+                    num_repels(i) = num_repels(i) + 1;
                     H_i = [H_r zeros(size(H_f,1), N_v);
                            zeros(N_v, size(H_f,2)) H_eps];
                     mat_f_x0_i = mat_f_x0_repel;

@@ -2,7 +2,7 @@ clc
 clear
 close all
 
-load('comp_repel_bvc1.mat')
+load('comp_repel_bvc2.mat')
 green = [0.55,0.71,0]; %apple green
 
 % Probability of success plots
@@ -26,8 +26,8 @@ h3 = plot(N_vector, prob_dmpc,':r','Linewidth',2.5);
 plot(N_vector, prob_dmpc,'or', 'MarkerFaceColor', 'r','Linewidth',1,'markers',10);
 xlabel('Number of Agents')
 ylabel('Success Probability [%]');
-set(h,'color','none'); % transparent legend
 [h, icons, plots, s] = legend([h1,h2,h3],'BVC', 'On-demand w/o repel', 'On-demand w/ repel');
+set(h,'color','none'); % transparent legend
 h_lines = findobj(icons, 'Type', 'Line');
 set(h_lines, 'LineStyle', '-','LineWidth',4); %// modify properties as desired
 set(gcf,'color','w');

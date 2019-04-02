@@ -27,7 +27,7 @@ for j = 1:N
        differ = (E2(:,:,j)*(p_i-p_j).^(order(j)-1))'; 
        prev_dist(idx) = dist^(order(j)-1);
        
-       if k_ctr <=1 && dist < rmin(j)
+       if k_ctr <=1 && dist < rmin(j) - 0.05
            % We're almost crashing, force agents to repel each other
            pf_tmp = p_i + (p_i-p_j)*(rmin(j)+0.1 -dist)/dist;
        end

@@ -9,26 +9,26 @@ load('sim_params.mat')
 % Load MPC tuning parameters
 load('mpc_params.mat')
 
-% Choose what data to visualize
-visualize = 0;      % 3D visualization of trajectory and predictions
+%% Choose what data to visualize
+visualize = 1;      % 3D visualization of trajectory and predictions
 view_states = 0;    % pos, vel and acc of all agents
 view_distance = 0;  % inter-agent distance over time
 view_cost = 0;      % value of the replanning cost function
 global debug_constr;
 debug_constr = 0;
 
-use_ondemand = false;
+use_ondemand = true;
 
 % Disturbance applied to the model within a time frame
 disturbance = 0;       % activate the disturbance
 agent_disturb = [1];   % choose which agents to perturb
-disturbance_k = [1:20, 50:70];  % timesteps to apply the perturbation
+disturbance_k = [1:50];  % timesteps to apply the perturbation
 
 % We will assume that all the rogue agents are labelled after the commanded agents
 
 % Number of vehicles in the problem
-N = 3;
-N_rogues = 1;
+N = 30;
+N_rogues = 0;
 
 % Specify a specific size for rogue agents
 order_r = 4;
@@ -65,23 +65,23 @@ pmax_gen = [1.5,1.5,2.2];
 % [po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin, E1, order);
 
 % Initial positions
-po1 = [-1.0, 0.0,1.0];
-po2 = [1.0,0.0,1.0];
-po3 = [-1.0,1.0,1.0];
-po4 = [1.0,-1.0,1.0];
-po5 = [1.0, 0.0, 1.0];
-po6 = [-1.0, 0.0, 1.0];
-po7 = [-0.0, 0.0, 1.0];
-po = cat(3,po1,po2,po7,po4,po5,po6,po7);
+% po1 = [-1.0, -1.0,1.0];
+% po2 = [1.0,1.0,1.0];
+% po3 = [-1.0,1.0,1.0];
+% po4 = [1.0,-1.0,1.0];
+% po5 = [1.0, 0.0, 1.0];
+% po6 = [-1.0, 0.0, 1.0];
+% po7 = [-0.0, 0.0, 1.0];
+% po = cat(3,po1,po2,po3,po4,po5,po6,po7);
 % 
 % % Final positions
-pf1 = [1.0, 0.0,1.0];
-pf2 = [-1.0,0.0,1.0];
-pf3 = [1.0,-1.0,1.0];
-pf4 = [-1.0,1.0,1.0];
-pf5 = [-1.0, 0.0, 1.0];
-pf6 = [1.0, 0.0, 1.0];
-pf  = cat(3,pf1,pf2);
+% pf1 = [1.0, 1.0,1.0];
+% pf2 = [-1.0,-1.0,1.0];
+% pf3 = [1.0,-1.0,1.0];
+% pf4 = [-1.0,1.0,1.0];
+% pf5 = [-1.0, 0.0, 1.0];
+% pf6 = [1.0, 0.0, 1.0];
+% pf  = cat(3,pf1,pf2,pf3,pf4);
 
 %%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 
@@ -288,7 +288,7 @@ for k = 2:K
                 H_eps = quad_coll_penalty*eye(N_v);
 
                 % If close to colliding, change setpoint to quickly react
-                if ~isempty(pf_tmp)
+                if ~isempty(pf_tmp) && false
                     H_i = [H_r zeros(size(H_f,1), N_v);
                            zeros(N_v, size(H_f,2)) H_eps];
                     mat_f_x0_i = mat_f_x0_repel;
@@ -389,13 +389,13 @@ for k = 2:K
             
         elseif disturbance && ismember(k,disturbance_k) && ismember(i,agent_disturb)
             % Apply simulated disturbance
-            if k <= 30
+%             if k <= 30
                 X0(1,i) = X0(1,i);
                 X0(4,i) = 0;
-            elseif k >= 50
-                X0(1,i) = X0(1,i) - 0.05;
-                X0(4,i) = -0.25;
-            end
+%             elseif k >= 50
+%                 X0(1,i) = X0(1,i) - 0.05;
+%                 X0(4,i) = -0.25;
+%             end
                 
             X0(:,i) = X0(:,i) + rnd_noise(std_p,std_v);
             prev_state(:,i) = X0(:,i);
@@ -434,8 +434,8 @@ toc
 
 % Check if collision constraints were not violated
 violated = false;
-rmin_check = 0.15;
-c_check = 3;
+rmin_check = 0.25;
+c_check = 2;
 E_check = diag([1,1,c_check]);
 E1_check = E_check^(-1);
 

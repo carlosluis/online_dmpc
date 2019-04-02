@@ -86,13 +86,3 @@ h_lines = findobj(icons, 'Type', 'Line');
 set(h_lines([1,5]), 'LineStyle', '-','LineWidth',2); %// modify properties as desired
 set(h_lines([3,7]), 'LineStyle', '--','LineWidth',2); %// modify properties as desired
 set(gcf,'color','w');
-
-
-
-
-
-
-
-
-
-

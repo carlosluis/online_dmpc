@@ -14,8 +14,8 @@ global debug_constr;
 debug_constr = 0;
 
 % Testing parameters
-N_vector = [5 10];
-trials = 1;
+N_vector = [5 10 15 20 25 30];
+trials = 50;
 
 for i = 1:N_vector(end)
     order(i) = order_a;
@@ -144,7 +144,7 @@ for p = 1:length(N_vector)
     end    
 end
 fprintf("Finished! \n")
-save('comp_repel_bvc1')
+save('comp_repel_bvc2')
 
 %% Post Processing
 

@@ -14,8 +14,8 @@ global debug_constr;
 debug_constr = 0;
 
 % Testing parameters
-N_vector = [5 10];
-trials = 2;
+N_vector = [5 10 15 20 25 30];
+trials = 50;
 
 for i = 1:N_vector(end)
     order(i) = order_a;
@@ -42,12 +42,10 @@ for p = 1:length(N_vector)
         
         % Run algorithm with on demand collision avoidance
         use_ondemand = true;
-        use_repel = true;
+        use_repel = false;
         run_algorithm;
         
         % record the metrics for comparison
-        repel_usage{p, q} = num_repels;
-        avgrepel_usage(p, q) = mean(num_repels);
         dmpc_tbuild(p,q) = 1000*mean2(t_build(3:end,:));
         dmpc_tqp(p,q) = 1000*mean2(t_qp(3:end,:));
         dmpc_violated(p,q) = violated;
@@ -156,7 +154,3 @@ errorbar(N_vector, tmean_traj2, tstd_traj2, 'b', 'Linewidth',2);
 xlabel('Number of agents');
 ylabel('Average Time for Transition [s]');
 legend('On-demand','BVC')
-
-
-
-

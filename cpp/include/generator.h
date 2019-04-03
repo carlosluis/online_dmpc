@@ -7,6 +7,7 @@
 
 #include "bezier.h"
 #include "model.h"
+#include <thread>
 
 struct PhysLimits {
     Eigen::VectorXd pmax;
@@ -49,6 +50,9 @@ public:
     Generator(const Generator::Params& p);
     ~Generator(){};
 
+    // Public methods
+    std::vector<Eigen::MatrixXd> get_next_inputs(const std::vector<State3D>& curr_states);
+
 private:
     float _h;
     float _Ts;
@@ -57,6 +61,8 @@ private:
     int _num_ctrl_pts;
     int _dim;
     int _Ncmd;
+    int _N;
+    int _d;
 
     Eigen::MatrixXd _po;
     Eigen::MatrixXd _pf;
@@ -67,6 +73,11 @@ private:
     Eigen::MatrixXd _H_energy;
     Constraint _ineq;
     Constraint _eq;
+
+    // Variables related to multithreading and clustering
+    const int _max_clusters;
+    std::vector<std::thread> _t;
+    std::vector<std::vector<int>> _cluster;
 
     // State propagators using the model
     StatePropagator _Lambda_pred;
@@ -86,9 +97,17 @@ private:
     std::vector<Eigen::RowVectorXd> _fpf_free;
     std::vector<Eigen::RowVectorXd> _fpf_obs;
 
+    // Horizon variables, one for solving and one for updating
+    std::vector<Eigen::MatrixXd> _newhorizon;
+    std::vector<Eigen::MatrixXd> _oldhorizon;
+    std::vector<Eigen::MatrixXd> _x0_ref;
+
     // Methods
     Constraint build_ineq_constr(const PhysLimits& lim);
     void set_error_penalty_mats(const TuningParams& p, const Eigen::MatrixXd& pf);
+    void init_clusters();
+    void init_generator();
+
 };
 
 #endif //ONLINE_PLANNING_GENERATOR_H

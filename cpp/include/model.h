@@ -13,6 +13,11 @@ struct StatePropagator {
     Eigen::MatrixXd vel;
 };
 
+struct State3D {
+    Eigen::Vector3d pos;
+    Eigen::Vector3d vel;
+};
+
 class DoubleIntegrator {
 public:
     DoubleIntegrator(){};

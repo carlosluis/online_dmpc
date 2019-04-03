@@ -10,7 +10,8 @@ using namespace Eigen;
 Generator::Generator(const Generator::Params& p) :
     _bezier(p.bezier_params),
     _model_pred(p.mpc_params.h, p.model_params),
-    _model_exec(p.mpc_params.Ts, p.model_params){
+    _model_exec(p.mpc_params.Ts, p.model_params),
+    _max_clusters(8){
 
     // Unpack params from struct into private members
     _h = p.mpc_params.h;
@@ -18,8 +19,10 @@ Generator::Generator(const Generator::Params& p) :
     _k_hor = p.mpc_params.k_hor;
     _dim = p.bezier_params.dim;
     _l = p.bezier_params.num_segments;
+    _d = p.bezier_params.deg;
     _po = p.po;
     _pf = p.pf;
+    _N = _po.cols();
     _Ncmd = _pf.cols();
     _fpf_free.reserve(_Ncmd);
     _fpf_obs.reserve(_Ncmd);
@@ -60,12 +63,11 @@ Generator::Generator(const Generator::Params& p) :
     // Set matrices to minimize goal error
     set_error_penalty_mats(p.mpc_params.tuning, _pf);
 
-    cout << _fpf_free[0].head(15) << endl << endl;
-    cout << _fpf_obs[0].head(15) << endl;
+    // Create threads and clusters to solve in parallel
+    init_clusters();
 
-//    cout << _Hlin_f.block(0, 0, 6, 15) << endl << endl;
-//    cout << _Hlin_o.block(0, 0, 6, 15) << endl << endl;
-//    cout << _Hlin_r.block(0, 0, 6, 15) << endl;
+    // Initialize several variables used to generate the trajectories
+    init_generator();
 }
 
 void Generator::set_error_penalty_mats(const TuningParams& p, const MatrixXd& pf) {
@@ -136,4 +138,49 @@ Constraint Generator::build_ineq_constr(const PhysLimits& limits) {
     ineq.b << lim_pos.b, lim_acc.b;
 
     return ineq;
+}
+
+void Generator::init_clusters() {
+    int n_clusters = min(_Ncmd, _max_clusters);
+    _t.resize(n_clusters);
+    _cluster.resize(n_clusters);
+    int agents_per_cluster = _Ncmd / n_clusters;
+    int residue = _Ncmd % n_clusters;
+    int cluster_capacity;
+    int N_index = 0;
+
+    for (int i = 0; i < n_clusters; i++) {
+        if (residue != 0) {
+            cluster_capacity = agents_per_cluster + 1;
+            residue--;
+        }
+        else cluster_capacity = agents_per_cluster;
+
+        int curr_index = N_index;
+        for (int j = curr_index; j < curr_index + cluster_capacity; j++) {
+            _cluster[i].push_back(j);
+            N_index = j + 1;
+        }
+    }
+}
+
+void Generator::init_generator() {
+    _x0_ref.reserve(_Ncmd);
+    _newhorizon.reserve(_N);
+    _oldhorizon.reserve(_N);
+    MatrixXd pos_aux = MatrixXd::Zero(_dim, _k_hor);
+    MatrixXd init_ref = MatrixXd::Zero(_dim, _d + 1);
+
+    for (int i = 0; i < _Ncmd; i++) {
+        VectorXd poi = _po.col(i);
+        VectorXd voi = 0.0001 * VectorXd::Ones(_dim);
+        init_ref << poi, voi, MatrixXd::Zero(_dim, _d - 1);
+        _x0_ref.push_back(init_ref);
+        _oldhorizon.push_back(poi.replicate(1, _k_hor));
+    }
+    _newhorizon = _oldhorizon;
+}
+
+vector<MatrixXd> Generator::get_next_inputs(const std::vector<State3D> &curr_states) {
+
 }

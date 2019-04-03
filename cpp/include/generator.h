@@ -56,6 +56,7 @@ private:
     int _l;
     int _num_ctrl_pts;
     int _dim;
+    int _Ncmd;
 
     Eigen::MatrixXd _po;
     Eigen::MatrixXd _pf;
@@ -66,13 +67,24 @@ private:
     Eigen::MatrixXd _H_energy;
     Constraint _ineq;
     Constraint _eq;
+
+    // State propagators using the model
+    StatePropagator _Lambda_pred;
+    StatePropagator _Lambda_exec;
+    StatePropagator _A0_pred;
+    StatePropagator _A0_exec;
     StatePropagator _Phi_pred;
     StatePropagator _Phi_exec;
 
-    // Matrices to minimize goal error
+    // Matrices and vectors to minimize goal error
     Eigen::MatrixXd _H_f;
     Eigen::MatrixXd _H_o;
     Eigen::MatrixXd _H_r;
+    Eigen::MatrixXd _Hlin_f;
+    Eigen::MatrixXd _Hlin_o;
+    Eigen::MatrixXd _Hlin_r;
+    std::vector<Eigen::RowVectorXd> _fpf_free;
+    std::vector<Eigen::RowVectorXd> _fpf_obs;
 
     // Methods
     Constraint build_ineq_constr(const PhysLimits& lim);

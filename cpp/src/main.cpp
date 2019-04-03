@@ -38,7 +38,7 @@ int main() {
     tune.spd_f = 3;
     tune.spd_o = 1;
     tune.spd_r = 10;
-    tune.lin_coll = -pow(10, 4);
+    tune.lin_coll = -pow(10, 5);
     tune.quad_coll = pow(10, 0);
     VectorXd cr = VectorXd::Zero(d + 1);
     cr(2) = .008;
@@ -46,28 +46,30 @@ int main() {
 
     // Physical limits for inequality constraint
     PhysLimits limits;
-    limits.pmin = (Eigen::Vector3d() << -2.5, -2.5, 0.2).finished();
-    limits.pmax = (Eigen::Vector3d() << 2.5, 2.5, 2.2).finished();
-    limits.amin = (Eigen::Vector3d() << -2.0, -2.0, -2.0).finished();
-    limits.amax = (Eigen::Vector3d() << 2.0, 2.0, 2.0).finished();
+    limits.pmin = (Eigen::Vector3d() << -1.5, -1.5, 0.2).finished();
+    limits.pmax = (Eigen::Vector3d() << 1.5, 1.5, 2.2).finished();
+    limits.amin = (Eigen::Vector3d() << -1.0, -1.0, -1.0).finished();
+    limits.amax = (Eigen::Vector3d() << 1.0, 1.0, 1.0).finished();
 
     // Collision constraint
     CollisionParams coll_params;
     coll_params.order = 2;
-    coll_params.rmin = 0.35;
+    coll_params.rmin = 0.30;
     coll_params.c = 2.0;
 
     MpcParams mpc_params = {h, ts, k_hor, tune, limits, coll_params};
 
     // Generate a standard test for 1 vehicle moving 1.0 meters
-    int N = 1;
+    int N = 2;
     MatrixXd po = MatrixXd::Zero(3, N);
-    Vector3d po1 = (Eigen::Vector3d() << 0.0, 0.0, 1.0).finished();
-    po << po1;
+    Vector3d po1 = (Eigen::Vector3d() << -1.0, -1.0, 1.0).finished();
+    Vector3d po2 = (Eigen::Vector3d() << 1.0, 1.0, 1.0).finished();
+    po << po1, po2;
 
     MatrixXd pf = MatrixXd::Zero(3, N);
-    Vector3d pf1 = (Eigen::Vector3d() << 1.0, 0.0, 1.0).finished();
-    pf << pf1;
+    Vector3d pf1 = (Eigen::Vector3d() << 1.0, 1.0, 1.0).finished();
+    Vector3d pf2 = (Eigen::Vector3d() << -1.0, -1.0, 1.0).finished();
+    pf << pf1, pf2;
 
     // Testing the Generator class
     Generator::Params p = {bezier_params, model_params, mpc_params, po, pf};

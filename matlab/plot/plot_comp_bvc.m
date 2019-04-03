@@ -2,7 +2,7 @@ clc
 clear
 close all
 
-load('comp_bvc5.mat')
+load('comp_bvc6.mat')
 
 % Probability of success plots
 prob_dmpc = sum(dmpc_success, 2) / trials * 100;
@@ -42,7 +42,7 @@ hold on;
 box on;
 xticks([5:5:30]);
 xlim([3,32])
-ylim([0,20])
+ylim([0,15])
 h1 = plot(N_vector, tmean_traj2,':b','LineWidth', 2.5);
 plot(N_vector, tmean_traj2,'ob', 'MarkerFaceColor', 'b','Linewidth',1.5,'markers',10);
 h2 = plot(N_vector, tmean_traj,':r','LineWidth', 2.5);

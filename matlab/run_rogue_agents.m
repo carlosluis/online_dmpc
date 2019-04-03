@@ -9,7 +9,7 @@ load('sim_params.mat')
 % Load MPC tuning parameters
 load('mpc_params.mat')
 
-%% Choose what data to visualize
+% Choose what data to visualize
 visualize = 1;      % 3D visualization of trajectory and predictions
 view_states = 0;    % pos, vel and acc of all agents
 view_distance = 0;  % inter-agent distance over time
@@ -27,7 +27,7 @@ disturbance_k = [1:50];  % timesteps to apply the perturbation
 % We will assume that all the rogue agents are labelled after the commanded agents
 
 % Number of vehicles in the problem
-N = 30;
+N = 4;
 N_rogues = 0;
 
 % Specify a specific size for rogue agents
@@ -65,23 +65,23 @@ pmax_gen = [1.5,1.5,2.2];
 % [po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin, E1, order);
 
 % Initial positions
-% po1 = [-1.0, -1.0,1.0];
-% po2 = [1.0,1.0,1.0];
-% po3 = [-1.0,1.0,1.0];
-% po4 = [1.0,-1.0,1.0];
-% po5 = [1.0, 0.0, 1.0];
-% po6 = [-1.0, 0.0, 1.0];
-% po7 = [-0.0, 0.0, 1.0];
-% po = cat(3,po1,po2,po3,po4,po5,po6,po7);
-% 
-% % Final positions
-% pf1 = [1.0, 1.0,1.0];
-% pf2 = [-1.0,-1.0,1.0];
-% pf3 = [1.0,-1.0,1.0];
-% pf4 = [-1.0,1.0,1.0];
-% pf5 = [-1.0, 0.0, 1.0];
-% pf6 = [1.0, 0.0, 1.0];
-% pf  = cat(3,pf1,pf2,pf3,pf4);
+po1 = [-1.0, -1.0,1.0];
+po2 = [1.0,1.0,1.0];
+po3 = [-1.0,1.0,1.0];
+po4 = [1.0,-1.0,1.0];
+po5 = [1.0, 0.0, 1.0];
+po6 = [-1.0, 0.0, 1.0];
+po7 = [-0.0, 0.0, 1.0];
+po = cat(3,po1,po2,po3,po4,po5,po6,po7);
+
+% Final positions
+pf1 = [1.0, 1.0,1.0];
+pf2 = [-1.0,-1.0,1.0];
+pf3 = [1.0,-1.0,1.0];
+pf4 = [-1.0,1.0,1.0];
+pf5 = [-1.0, 0.0, 1.0];
+pf6 = [1.0, 0.0, 1.0];
+pf  = cat(3,pf1,pf2,pf3,pf4);
 
 %%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 

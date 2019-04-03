@@ -20,6 +20,9 @@ Generator::Generator(const Generator::Params& p) :
     _l = p.bezier_params.num_segments;
     _po = p.po;
     _pf = p.pf;
+    _Ncmd = _pf.cols();
+    _fpf_free.reserve(_Ncmd);
+    _fpf_obs.reserve(_Ncmd);
 
     // Define two time bases:
     // 1) h_samples is the time base for the planning of trajectories
@@ -37,16 +40,16 @@ Generator::Generator(const Generator::Params& p) :
     std::vector<MatrixXd> Rho_ts = _bezier.get_vec_input_sampling(ts_samples);
 
     // Get the matrices that propagate the input (i.e., optimization result) using the model
-    StatePropagator Lambda_pred = _model_pred.get_lambda(_k_hor);
-    StatePropagator A0_pred = _model_pred.get_A0(_k_hor);
-    StatePropagator Lambda_exec = _model_exec.get_lambda(_h / _Ts);
-    StatePropagator A0_exec = _model_exec.get_A0(_h / _Ts);
+    _Lambda_pred = _model_pred.get_lambda(_k_hor);
+    _A0_pred = _model_pred.get_A0(_k_hor);
+    _Lambda_exec = _model_exec.get_lambda(_h / _Ts);
+    _A0_exec = _model_exec.get_A0(_h / _Ts);
 
     // Create new matrices that map bezier curve control points to states of the robot
-    _Phi_pred.pos = Lambda_pred.pos * Rho_h.at(0);
-    _Phi_pred.vel = Lambda_pred.vel * Rho_h.at(0);
-    _Phi_exec.pos = Lambda_exec.pos * Rho_ts.at(0);
-    _Phi_exec.vel = Lambda_exec.vel * Rho_ts.at(0);
+    _Phi_pred.pos = _Lambda_pred.pos * Rho_h.at(0);
+    _Phi_pred.vel = _Lambda_pred.vel * Rho_h.at(0);
+    _Phi_exec.pos = _Lambda_exec.pos * Rho_ts.at(0);
+    _Phi_exec.vel = _Lambda_exec.vel * Rho_ts.at(0);
 
     // Build the inequality constraints regarding the physical limits of the robot
     _ineq = build_ineq_constr(p.mpc_params.limits);
@@ -57,9 +60,12 @@ Generator::Generator(const Generator::Params& p) :
     // Set matrices to minimize goal error
     set_error_penalty_mats(p.mpc_params.tuning, _pf);
 
-    cout << _H_f.block(0, 0, 15, 15) << endl << endl;
-    cout << _H_o.block(0, 0, 15, 15) << endl << endl;
-    cout << _H_r.block(0, 0, 15, 15) << endl;
+    cout << _fpf_free[0].head(15) << endl << endl;
+    cout << _fpf_obs[0].head(15) << endl;
+
+//    cout << _Hlin_f.block(0, 0, 6, 15) << endl << endl;
+//    cout << _Hlin_o.block(0, 0, 6, 15) << endl << endl;
+//    cout << _Hlin_r.block(0, 0, 6, 15) << endl;
 }
 
 void Generator::set_error_penalty_mats(const TuningParams& p, const MatrixXd& pf) {
@@ -97,6 +103,19 @@ void Generator::set_error_penalty_mats(const TuningParams& p, const MatrixXd& pf
     _H_f = H_free + _H_energy;
     _H_o = H_obs + _H_energy;
     _H_r = H_repel + _H_energy;
+
+    // Build the matrices that multiply the initial condition to obtain the linear term of the cost
+    _Hlin_f = _A0_pred.pos.transpose() * S_free * _Phi_pred.pos;
+    _Hlin_o = _A0_pred.pos.transpose() * S_obs * _Phi_pred.pos;
+    _Hlin_r = _A0_pred.pos.transpose() * S_repel * _Phi_pred.pos;
+
+    // Build the constant part of the linear term of the cost function
+    for (int i = 0; i < _Ncmd; i++) {
+        VectorXd pfi = _pf.col(i);
+        _fpf_free.push_back(pfi.replicate(_k_hor, 1).transpose() * S_free * _Phi_pred.pos);
+        _fpf_obs.push_back(pfi.replicate(_k_hor, 1).transpose() * S_obs * _Phi_pred.pos);
+    }
+
 }
 
 Constraint Generator::build_ineq_constr(const PhysLimits& limits) {

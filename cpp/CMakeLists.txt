@@ -33,6 +33,8 @@ add_library(generator
 
 target_link_libraries(generator
 	bezier
+	pthread
+	eigen-quadprog
 	model)
 
 target_link_libraries(run

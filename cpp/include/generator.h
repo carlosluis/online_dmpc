@@ -7,13 +7,11 @@
 
 #include "bezier.h"
 #include "model.h"
+#include "eigen-quadprog/src/QuadProg.h"
 #include <thread>
 
 struct PhysLimits {
-    Eigen::VectorXd pmax;
-    Eigen::VectorXd pmin;
-    Eigen::VectorXd amax;
-    Eigen::VectorXd amin;
+    Eigen::VectorXd pmax, pmin, amax, amin;
 };
 
 struct TuningParams {
@@ -23,18 +21,23 @@ struct TuningParams {
     Eigen::VectorXd energy_weights;
 };
 
-struct CollisionParams {
+struct EllipseParams {
     int order;
     float rmin;
-    float c;
+    Eigen::VectorXd c;
+};
+
+struct Ellipse {
+    int order;
+    float rmin;
+    Eigen::MatrixXd E1, E2;
 };
 
 struct MpcParams {
-    float h, Ts;
-    int k_hor;
+    const float& h, Ts;
+    const int& k_hor;
     const TuningParams& tuning;
     const PhysLimits& limits;
-    const CollisionParams coll;
 };
 
 class Generator {
@@ -42,16 +45,19 @@ public:
     struct Params {
         const BezierCurve::Params& bezier_params;
         const DoubleIntegrator3D::Params& model_params;
+        const std::vector<EllipseParams>& ellipse;
         const MpcParams& mpc_params;
-        const Eigen::MatrixXd& po;
-        const Eigen::MatrixXd& pf;
+        const Eigen::MatrixXd& po, pf;
     };
 
     Generator(const Generator::Params& p);
     ~Generator(){};
 
     // Public methods
-    std::vector<Eigen::MatrixXd> get_next_inputs(const std::vector<State3D>& curr_states);
+//    void get_next_inputs();
+    void get_next_inputs(const std::vector<State3D>& curr_states);
+//    std::vector<Eigen::MatrixXd> get_next_inputs(const std::vector<State3D>& curr_states);
+
 
 private:
     float _h;
@@ -67,12 +73,18 @@ private:
     Eigen::MatrixXd _po;
     Eigen::MatrixXd _pf;
 
+    float _max_cost;
+    float _min_cost;
+
     BezierCurve _bezier;
     DoubleIntegrator3D _model_pred;
     DoubleIntegrator3D _model_exec;
     Eigen::MatrixXd _H_energy;
     Constraint _ineq;
     Constraint _eq;
+
+    // Vector with ellipse parameters for each agent
+    std::vector<Ellipse> _ellipse;
 
     // Variables related to multithreading and clustering
     const int _max_clusters;
@@ -103,10 +115,16 @@ private:
     std::vector<Eigen::MatrixXd> _x0_ref;
 
     // Methods
+    void init_generator();
+    std::vector<Ellipse> init_ellipses(const std::vector<EllipseParams>& p);
     Constraint build_ineq_constr(const PhysLimits& lim);
     void set_error_penalty_mats(const TuningParams& p, const Eigen::MatrixXd& pf);
     void init_clusters();
-    void init_generator();
+    Constraint build_coll_constr(const State3D& state);
+    void test();
+    Eigen::MatrixXd get_init_ref(const State3D& state, const Eigen::MatrixXd& ref);
+    void solve_cluster(const std::vector<State3D>& curr_states,
+                       const std::vector<int>& agents);
 
 };
 

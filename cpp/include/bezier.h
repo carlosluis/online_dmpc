@@ -16,8 +16,8 @@ struct Constraint {
 class BezierCurve {
 public:
     struct Params{
-        int deg, num_segments, dim, deg_poly;
-        float t_segment;
+        const int& deg, num_segments, dim, deg_poly;
+        const float& t_segment;
     };
 
 	BezierCurve(const BezierCurve::Params& p);
@@ -55,8 +55,6 @@ private:
     Eigen::MatrixXd augmented_form(Eigen::MatrixXd mat);
 
     Eigen::MatrixXd get_mat_input_sampling(Eigen::VectorXd t_samples, int r);
-
-
 
     // Variables
     int _deg;

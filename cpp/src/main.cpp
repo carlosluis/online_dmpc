@@ -51,16 +51,21 @@ int main() {
     limits.amin = (Eigen::Vector3d() << -1.0, -1.0, -1.0).finished();
     limits.amax = (Eigen::Vector3d() << 1.0, 1.0, 1.0).finished();
 
-    // Collision constraint
-    CollisionParams coll_params;
-    coll_params.order = 2;
-    coll_params.rmin = 0.30;
-    coll_params.c = 2.0;
+    // Number of agents to control
+    int N = 2;
 
-    MpcParams mpc_params = {h, ts, k_hor, tune, limits, coll_params};
+    // Collision constraint for an agent
+    EllipseParams ellipse_params;
+    ellipse_params.order = 2;
+    ellipse_params.rmin = 0.30;
+    ellipse_params.c = (Eigen::Vector3d() << 1.0, 1.0, 2.0).finished();
+
+    std::vector<EllipseParams> ellipse_vec(N, ellipse_params);
+
+    MpcParams mpc_params = {h, ts, k_hor, tune, limits};
 
     // Generate a standard test for 1 vehicle moving 1.0 meters
-    int N = 2;
+
     MatrixXd po = MatrixXd::Zero(3, N);
     Vector3d po1 = (Eigen::Vector3d() << -1.0, -1.0, 1.0).finished();
     Vector3d po2 = (Eigen::Vector3d() << 1.0, 1.0, 1.0).finished();
@@ -72,8 +77,13 @@ int main() {
     pf << pf1, pf2;
 
     // Testing the Generator class
-    Generator::Params p = {bezier_params, model_params, mpc_params, po, pf};
+    Generator::Params p = {bezier_params, model_params, ellipse_vec, mpc_params, po, pf};
     Generator gen(p);
+
+    State3D agent1 = {.pos = po1, .vel = 0.001*VectorXd::Ones(dim)};
+    State3D agent2 = {.pos = po2, .vel = 0.001*VectorXd::Ones(dim)};
+    std::vector<State3D> curr_states{agent1, agent2};
+    gen.get_next_inputs(curr_states);
 
 	return 0;
 }

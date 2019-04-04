@@ -11,7 +11,9 @@ Generator::Generator(const Generator::Params& p) :
     _bezier(p.bezier_params),
     _model_pred(p.mpc_params.h, p.model_params),
     _model_exec(p.mpc_params.Ts, p.model_params),
-    _max_clusters(8){
+    _max_clusters(1),
+    _max_cost(0.08),
+    _min_cost(-0.01){
 
     // Unpack params from struct into private members
     _h = p.mpc_params.h;
@@ -62,6 +64,9 @@ Generator::Generator(const Generator::Params& p) :
 
     // Set matrices to minimize goal error
     set_error_penalty_mats(p.mpc_params.tuning, _pf);
+
+    // Set Ellipsoidal constraints variables
+    _ellipse = init_ellipses(p.ellipse);
 
     // Create threads and clusters to solve in parallel
     init_clusters();
@@ -140,6 +145,21 @@ Constraint Generator::build_ineq_constr(const PhysLimits& limits) {
     return ineq;
 }
 
+std::vector<Ellipse> Generator::init_ellipses(const std::vector<EllipseParams>& p) {
+    Ellipse tmp;
+    vector<Ellipse> ellipse;
+    MatrixXd E;
+    for (int i = 0; i < p.size(); i++) {
+        tmp.order = p[i].order;
+        tmp.rmin = p[i].rmin;
+        E = p[i].c.asDiagonal();
+        tmp.E1 = E.inverse();
+        tmp.E2 = tmp.E1.array().pow(2);
+        ellipse.push_back(tmp);
+    }
+    return ellipse;
+}
+
 void Generator::init_clusters() {
     int n_clusters = min(_Ncmd, _max_clusters);
     _t.resize(n_clusters);
@@ -181,6 +201,48 @@ void Generator::init_generator() {
     _newhorizon = _oldhorizon;
 }
 
-vector<MatrixXd> Generator::get_next_inputs(const std::vector<State3D> &curr_states) {
+void Generator::get_next_inputs(const vector<State3D>& curr_states) {
 
+    // Launch all the threads to get the next set of inputs
+    for (int i = 0; i < _cluster.size(); i++) {
+        _t[i] = std::thread{&Generator::solve_cluster, this, ref(curr_states), _cluster[i]};
+    }
+
+    for (int i = 0; i < _cluster.size(); ++i)
+        _t[i].join();
+}
+
+void Generator::solve_cluster(const std::vector<State3D> &curr_states,
+                              const std::vector<int> &agents) {
+
+    VectorXd err_pos, cost, denominator;
+    for (int i = agents.front(); i <= agents.back(); i++) {
+        // Pick initial condition for the reference
+        _x0_ref[i] = get_init_ref(curr_states[i], _x0_ref[i]);
+
+        // Check horizon and build collision constraints
+
+
+        // solve QP and get solution vector x
+
+        // transform solution vector into position state horizon - update _new_horizon
+    }
+}
+
+MatrixXd Generator::get_init_ref(const State3D &state, const MatrixXd& ref) {
+    VectorXd err_pos, cost, denominator;
+    err_pos = state.pos - ref.col(0);
+    denominator = -(state.vel.array() + 0.01 * state.vel.array().sign());
+    cost = err_pos.array().pow(5) / denominator.array();
+
+    if ((cost.array() > _max_cost).any() ||  (cost.array() < _min_cost).any()) {
+        MatrixXd new_ref = MatrixXd::Zero(_dim, _d + 1);
+        new_ref << state.pos, state.vel, MatrixXd::Zero(_dim, _d - 1);
+        return new_ref;
+    }
+    else return ref;
+}
+
+void Generator::test() {
+    cout << &_k_hor << endl;
 }

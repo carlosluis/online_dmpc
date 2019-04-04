@@ -245,7 +245,7 @@ for k = 2:K
         
         % Cost that determines whether there's something disturbing the agent
         % Cost gets higher when the error between the reference and the state gets higher
-        cost(:,k,i) = (err_pos_ref(:,k).^5) ./ (-X0(4:6,i)+sign(X0(4:6,i))*0.01);
+        cost(:,k,i) = (err_pos_ref(:,k).^5) ./ -(X0(4:6,i)+sign(X0(4:6,i))*0.01);
         
         % Integral term on position
         integ_err(:,k) = integ_err(:,k-1) + err_pos_ref(:,k)*h;

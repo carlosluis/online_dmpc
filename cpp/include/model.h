@@ -9,13 +9,11 @@
 
 // Define a struct for lifted matrices in position and velocity separately
 struct StatePropagator {
-    Eigen::MatrixXd pos;
-    Eigen::MatrixXd vel;
+    Eigen::MatrixXd pos, vel;
 };
 
 struct State3D {
-    Eigen::Vector3d pos;
-    Eigen::Vector3d vel;
+    Eigen::Vector3d pos, vel;
 };
 
 class DoubleIntegrator {
@@ -37,7 +35,7 @@ public:
     // Define parameters to create a 3D double integrator model
     // We assume identical dynamics for X and Y, based on quadcopter experiments
     struct Params {
-        float zeta_xy,  tau_xy, zeta_z, tau_z;
+        const float& zeta_xy,  tau_xy, zeta_z, tau_z;
     };
     DoubleIntegrator3D (const float& time_step, const DoubleIntegrator3D::Params& p);
     ~DoubleIntegrator3D(){};
@@ -47,7 +45,7 @@ class DoubleIntegrator2D : public DoubleIntegrator {
 public:
     // To be used for ground robots or quadcopters flying in the plane
     struct Params {
-        float zeta_x,  tau_x, zeta_y, tau_y;
+        const float& zeta_x,  tau_x, zeta_y, tau_y;
     };
 
     DoubleIntegrator2D (const float& time_step, const DoubleIntegrator2D::Params& p);

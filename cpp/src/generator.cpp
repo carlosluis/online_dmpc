@@ -65,14 +65,16 @@ Generator::Generator(const Generator::Params& p) :
     // Set matrices to minimize goal error
     set_error_penalty_mats(p.mpc_params.tuning, _pf);
 
-    // Set Ellipsoidal constraints variables
-    _ellipse = init_ellipses(p.ellipse);
-
     // Create threads and clusters to solve in parallel
     init_clusters();
 
     // Initialize several variables used to generate the trajectories
     init_generator();
+
+    // Create the avoider object for collision avoidance
+    _avoider = std::make_unique<OndemandAvoider>(_oldhorizon, _Phi_pred.pos,
+                                                 _A0_pred.pos, p.ellipse);
+
 }
 
 void Generator::set_error_penalty_mats(const TuningParams& p, const MatrixXd& pf) {
@@ -143,21 +145,6 @@ Constraint Generator::build_ineq_constr(const PhysLimits& limits) {
     ineq.b << lim_pos.b, lim_acc.b;
 
     return ineq;
-}
-
-std::vector<Ellipse> Generator::init_ellipses(const std::vector<EllipseParams>& p) {
-    Ellipse tmp;
-    vector<Ellipse> ellipse;
-    MatrixXd E;
-    for (int i = 0; i < p.size(); i++) {
-        tmp.order = p[i].order;
-        tmp.rmin = p[i].rmin;
-        E = p[i].c.asDiagonal();
-        tmp.E1 = E.inverse();
-        tmp.E2 = tmp.E1.array().pow(2);
-        ellipse.push_back(tmp);
-    }
-    return ellipse;
 }
 
 void Generator::init_clusters() {
@@ -242,6 +229,7 @@ MatrixXd Generator::get_init_ref(const State3D &state, const MatrixXd& ref) {
     }
     else return ref;
 }
+
 
 void Generator::test() {
     cout << &_k_hor << endl;

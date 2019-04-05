@@ -5,7 +5,7 @@ project(online_planning)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 set( CMAKE_EXPORT_COMPILE_COMMANDS ON )
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
@@ -28,11 +28,15 @@ add_library(bezier
 add_library(model
 	src/model.cpp)
 
+add_library(avoidance
+		src/avoidance.cpp)
+
 add_library(generator
 	src/generator.cpp)
 
 target_link_libraries(generator
 	bezier
+	avoidance
 	pthread
 	eigen-quadprog
 	model)

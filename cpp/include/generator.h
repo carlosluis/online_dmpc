@@ -7,6 +7,7 @@
 
 #include "bezier.h"
 #include "model.h"
+#include "avoidance.h"
 #include "eigen-quadprog/src/QuadProg.h"
 #include <thread>
 
@@ -19,18 +20,6 @@ struct TuningParams {
     int spd_f, spd_o, spd_r;
     double lin_coll, quad_coll;
     Eigen::VectorXd energy_weights;
-};
-
-struct EllipseParams {
-    int order;
-    float rmin;
-    Eigen::VectorXd c;
-};
-
-struct Ellipse {
-    int order;
-    float rmin;
-    Eigen::MatrixXd E1, E2;
 };
 
 struct MpcParams {
@@ -83,9 +72,6 @@ private:
     Constraint _ineq;
     Constraint _eq;
 
-    // Vector with ellipse parameters for each agent
-    std::vector<Ellipse> _ellipse;
-
     // Variables related to multithreading and clustering
     const int _max_clusters;
     std::vector<std::thread> _t;
@@ -98,6 +84,9 @@ private:
     StatePropagator _A0_exec;
     StatePropagator _Phi_pred;
     StatePropagator _Phi_exec;
+
+    // Collision avoidance module
+    std::unique_ptr<BaseAvoider> _avoider;
 
     // Matrices and vectors to minimize goal error
     Eigen::MatrixXd _H_f;
@@ -116,11 +105,9 @@ private:
 
     // Methods
     void init_generator();
-    std::vector<Ellipse> init_ellipses(const std::vector<EllipseParams>& p);
     Constraint build_ineq_constr(const PhysLimits& lim);
     void set_error_penalty_mats(const TuningParams& p, const Eigen::MatrixXd& pf);
     void init_clusters();
-    Constraint build_coll_constr(const State3D& state);
     void test();
     Eigen::MatrixXd get_init_ref(const State3D& state, const Eigen::MatrixXd& ref);
     void solve_cluster(const std::vector<State3D>& curr_states,

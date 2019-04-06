@@ -108,7 +108,6 @@ private:
     Constraint build_ineq_constr(const PhysLimits& lim);
     void set_error_penalty_mats(const TuningParams& p, const Eigen::MatrixXd& pf);
     void init_clusters();
-    void test();
     Eigen::MatrixXd get_init_ref(const State3D& state, const Eigen::MatrixXd& ref);
     void solve_cluster(const std::vector<State3D>& curr_states,
                        const std::vector<int>& agents);

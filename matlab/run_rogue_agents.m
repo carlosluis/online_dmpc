@@ -27,7 +27,7 @@ disturbance_k = [1:50];  % timesteps to apply the perturbation
 % We will assume that all the rogue agents are labelled after the commanded agents
 
 % Number of vehicles in the problem
-N = 4;
+N = 2;
 N_rogues = 0;
 
 % Specify a specific size for rogue agents
@@ -66,7 +66,7 @@ pmax_gen = [1.5,1.5,2.2];
 
 % Initial positions
 po1 = [-1.0, -1.0,1.0];
-po2 = [1.0,1.0,1.0];
+po2 = [-1.0,-0.8,1.0];
 po3 = [-1.0,1.0,1.0];
 po4 = [1.0,-1.0,1.0];
 po5 = [1.0, 0.0, 1.0];
@@ -81,7 +81,7 @@ pf3 = [1.0,-1.0,1.0];
 pf4 = [-1.0,1.0,1.0];
 pf5 = [-1.0, 0.0, 1.0];
 pf6 = [1.0, 0.0, 1.0];
-pf  = cat(3,pf1,pf2,pf3,pf4);
+pf  = cat(3,pf1,pf2);
 
 %%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 

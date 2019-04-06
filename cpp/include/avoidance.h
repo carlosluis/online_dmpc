@@ -21,12 +21,17 @@ struct Ellipse {
     Eigen::MatrixXd E1, E2;
 };
 
+struct CollisionConstraint {
+    Constraint constraint;
+    Eigen::VectorXd distance;
+};
+
 class BaseAvoider {
 public:
     BaseAvoider(){};
     ~BaseAvoider(){};
 
-    virtual Constraint get_coll_constr(const State3D& state, const int& agent_id) = 0;
+    virtual Constraint get_coll_constr(const State3D& state, int agent_id) = 0;
 };
 
 class OndemandAvoider : public BaseAvoider {
@@ -34,7 +39,7 @@ public:
     OndemandAvoider (const std::vector<Eigen::MatrixXd>& horizon, const Eigen::MatrixXd& Phi_pos,
                      const Eigen::MatrixXd& A0_pos, const std::vector<EllipseParams>& p);
 
-    Constraint get_coll_constr(const State3D& state, const int& agent_id);
+    Constraint get_coll_constr(const State3D& state, int agent_id);
 
 
 private:
@@ -47,7 +52,14 @@ private:
     const std::vector<Eigen::MatrixXd>& _horizon;
     const Eigen::MatrixXd& _Phi_pos;
     const Eigen::MatrixXd& _A0_pos;
+    int _k_hor;
+    int _N;
+    int _dim;
 
+    // Private methods
+    std::vector<bool> check_collisions(int agent_id, int k);
+    CollisionConstraint build_coll_constr(int agent_id, int k, const std::vector<bool>& neighbours,
+                                          const State3D& state);
 };
 
 #endif //ONLINE_PLANNING_AVOIDANCE_H

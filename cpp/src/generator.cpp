@@ -13,8 +13,8 @@ Generator::Generator(const Generator::Params& p) :
     _model_exec(p.mpc_params.Ts, p.model_params),
     _max_clusters(1),
     _max_cost(0.08),
-    _min_cost(-0.01){
-
+    _min_cost(-0.01)
+{
     // Unpack params from struct into private members
     _h = p.mpc_params.h;
     _Ts = p.mpc_params.Ts;
@@ -207,8 +207,8 @@ void Generator::solve_cluster(const std::vector<State3D> &curr_states,
         // Pick initial condition for the reference
         _x0_ref[i] = get_init_ref(curr_states[i], _x0_ref[i]);
 
-        // Check horizon and build collision constraints
-
+        // Build collision constraint
+        Constraint collision = _avoider->get_coll_constr(curr_states[i], i);
 
         // solve QP and get solution vector x
 
@@ -228,9 +228,4 @@ MatrixXd Generator::get_init_ref(const State3D &state, const MatrixXd& ref) {
         return new_ref;
     }
     else return ref;
-}
-
-
-void Generator::test() {
-    cout << &_k_hor << endl;
 }

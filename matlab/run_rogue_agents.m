@@ -22,7 +22,7 @@ use_ondemand = true;
 % Disturbance applied to the model within a time frame
 disturbance = 0;       % activate the disturbance
 agent_disturb = [1];   % choose which agents to perturb
-disturbance_k = [1:50];  % timesteps to apply the perturbation
+disturbance_k = [1:80];  % timesteps to apply the perturbation
 
 % We will assume that all the rogue agents are labelled after the commanded agents
 
@@ -66,7 +66,7 @@ pmax_gen = [1.5,1.5,2.2];
 
 % Initial positions
 po1 = [-1.0, -1.0,1.0];
-po2 = [-1.0,-0.8,1.0];
+po2 = [1.0,1.0,1.0];
 po3 = [-1.0,1.0,1.0];
 po4 = [1.0,-1.0,1.0];
 po5 = [1.0, 0.0, 1.0];

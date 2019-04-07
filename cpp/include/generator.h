@@ -8,6 +8,7 @@
 #include "bezier.h"
 #include "model.h"
 #include "avoidance.h"
+#include "solver.h"
 #include "eigen-quadprog/src/QuadProg.h"
 #include <thread>
 
@@ -58,6 +59,10 @@ private:
     int _Ncmd;
     int _N;
     int _d;
+    int _deg_poly;
+
+    double _lin_coll;
+    double _quad_coll;
 
     Eigen::MatrixXd _po;
     Eigen::MatrixXd _pf;
@@ -111,6 +116,9 @@ private:
     Eigen::MatrixXd get_init_ref(const State3D& state, const Eigen::MatrixXd& ref);
     void solve_cluster(const std::vector<State3D>& curr_states,
                        const std::vector<int>& agents);
+
+    QuadraticProblem build_qp(const Constraint& collision, const State3D& state,
+                              int agent_id);
 
 };
 

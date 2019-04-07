@@ -22,12 +22,15 @@ Generator::Generator(const Generator::Params& p) :
     _dim = p.bezier_params.dim;
     _l = p.bezier_params.num_segments;
     _d = p.bezier_params.deg;
+    _deg_poly = p.bezier_params.deg_poly;
     _po = p.po;
     _pf = p.pf;
     _N = _po.cols();
     _Ncmd = _pf.cols();
     _fpf_free.reserve(_Ncmd);
     _fpf_obs.reserve(_Ncmd);
+    _lin_coll = p.mpc_params.tuning.lin_coll;
+    _quad_coll = p.mpc_params.tuning.quad_coll;
 
     // Define two time bases:
     // 1) h_samples is the time base for the planning of trajectories
@@ -180,7 +183,7 @@ void Generator::init_generator() {
 
     for (int i = 0; i < _Ncmd; i++) {
         VectorXd poi = _po.col(i);
-        VectorXd voi = 0.0001 * VectorXd::Ones(_dim);
+        VectorXd voi = 0.001 * VectorXd::Ones(_dim);
         init_ref << poi, voi, MatrixXd::Zero(_dim, _d - 1);
         _x0_ref.push_back(init_ref);
         _oldhorizon.push_back(poi.replicate(1, _k_hor));
@@ -210,10 +213,54 @@ void Generator::solve_cluster(const std::vector<State3D> &curr_states,
         // Build collision constraint
         Constraint collision = _avoider->get_coll_constr(curr_states[i], i);
 
-        // solve QP and get solution vector x
+        // We need to increase the size of other matrices if collision constraints are included
+        QuadraticProblem problem = build_qp(collision, curr_states[i], i);
 
+        // solve QP and get solution vector x
         // transform solution vector into position state horizon - update _new_horizon
     }
+}
+
+QuadraticProblem Generator::build_qp(const Constraint& collision, const State3D& state,
+                                     int agent_id) {
+    // Determine if a collision happened, based on the size of the constraint
+    int num_neigh = collision.b.size() / 2;
+    int num_vars = _ineq.A.cols() + num_neigh;
+    int num_ineq = _ineq.A.rows() + 2 * num_neigh;
+    int num_eq = _eq.A.rows();
+
+    MatrixXd Ain = MatrixXd::Zero(num_ineq, num_vars);
+    MatrixXd Aeq = MatrixXd::Zero(num_eq, num_vars);
+    MatrixXd H = MatrixXd::Zero(num_vars, num_vars);
+    VectorXd bin = VectorXd::Zero(num_ineq);
+    VectorXd beq = VectorXd::Zero(num_eq);
+    VectorXd f = VectorXd::Zero(num_vars);
+    VectorXd x0 = VectorXd::Zero(2 * _dim);
+    x0 << state.pos, state.vel;
+
+    Ain << _ineq.A, MatrixXd::Zero(_ineq.A.rows(), num_neigh),
+            collision.A;
+
+    bin << _ineq.b, collision.b;
+    Aeq << _eq.A, MatrixXd::Zero(num_eq, num_neigh);
+    for (int i = 0; i < _deg_poly + 1; i++)
+        beq.segment(_dim * i * _l, _dim) = _x0_ref[agent_id].col(i);
+
+
+    if (collision.b.size() > 0) {
+        MatrixXd H_eps = _quad_coll * MatrixXd::Identity(num_neigh, num_neigh);
+        VectorXd f_eps = _lin_coll * VectorXd::Ones(num_neigh);
+        H << _H_o, MatrixXd::Zero(_H_o.rows(), num_neigh),
+             MatrixXd::Zero(num_neigh, _H_o.cols()), H_eps;
+        f << -2 * (_fpf_obs[agent_id] - x0.transpose() * _Hlin_o).transpose(), f_eps;
+    }
+    else {
+        H = _H_f;
+        f << -2 * (_fpf_free[agent_id] - x0.transpose() * _Hlin_f).transpose();
+    }
+
+    QuadraticProblem problem = {H, Aeq, Ain, f, beq, bin};
+    return problem;
 }
 
 MatrixXd Generator::get_init_ref(const State3D &state, const MatrixXd& ref) {

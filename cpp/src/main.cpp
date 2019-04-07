@@ -68,7 +68,7 @@ int main() {
 
     MatrixXd po = MatrixXd::Zero(3, N);
     Vector3d po1 = (Eigen::Vector3d() << -1.0, -1.0, 1.0).finished();
-    Vector3d po2 = (Eigen::Vector3d() << -1.0, -0.8, 1.0).finished();
+    Vector3d po2 = (Eigen::Vector3d() << 1.0, 1.0, 1.0).finished();
     po << po1, po2;
 
     MatrixXd pf = MatrixXd::Zero(3, N);

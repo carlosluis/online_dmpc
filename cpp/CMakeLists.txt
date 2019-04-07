@@ -31,12 +31,16 @@ add_library(model
 add_library(avoidance
 		src/avoidance.cpp)
 
+add_library(solver
+		src/solver.cpp)
+
 add_library(generator
 	src/generator.cpp)
 
 target_link_libraries(generator
 	bezier
 	avoidance
+	solver
 	pthread
 	eigen-quadprog
 	model)

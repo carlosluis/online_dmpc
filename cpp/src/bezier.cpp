@@ -236,22 +236,22 @@ std::vector<MatrixXd> BezierCurve::derivate_ctrl_pts() {
     return T_ctrl_pts;
 }
 
-Constraint BezierCurve::limit_derivative(int n, Eigen::VectorXd t_samples,
-                                         VectorXd min, VectorXd max) {
+InequalityConstraint BezierCurve::limit_derivative(int n, Eigen::VectorXd t_samples,
+                                                   VectorXd min, VectorXd max) {
 
     // Build 'A' matrix for the constraint
     MatrixXd A_in = get_mat_input_sampling(t_samples, n);
-    MatrixXd A_in_t(2 * A_in.rows(), A_in.cols());
+    MatrixXd A_in_t = MatrixXd::Zero(2 * A_in.rows(), A_in.cols());
     A_in_t << A_in, -A_in;
 
     // Build 'b' vector for the constraint
     VectorXd b_max = max.replicate(t_samples.size(), 1);
     VectorXd b_min = min.replicate(t_samples.size(), 1);
     VectorXd b_in(2 * b_max.size());
-    b_in << b_max, b_min;
+    b_in << b_max, -b_min;
 
     // Assemble constraint struct
-    Constraint constr = {A_in_t, b_in};
+    InequalityConstraint constr = {A_in_t, b_in, A_in, b_min, b_max};
     return constr;
 }
 
@@ -273,8 +273,8 @@ MatrixXd BezierCurve::get_mat_eq_constr(int deg_poly) {
             D(0, 0) = 1;
         }
         else {
-            D(k, k * (_deg + 1)) = 1;
-            D(k, k * (_deg + 1) + 1) = -1;
+            D(k, k * (_deg + 1) - 1) = 1;
+            D(k, k * (_deg + 1)) = -1;
         }
     }
 
@@ -297,10 +297,11 @@ MatrixXd BezierCurve::get_mat_eq_constr(int deg_poly) {
                     aux.block(n, 0, 1, _num_segments * num_cols) = row_insert;
                 }
             }
-
             Aeq.block((k+1)*num_rows, 0, num_rows, _num_ctrl_pts) = increase_matrix_dim(aux, _dim);
         }
     }
+
+//    cout << Aeq.leftCols(48) << endl << endl;
 
     return Aeq;
 }

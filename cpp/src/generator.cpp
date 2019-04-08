@@ -47,6 +47,8 @@ Generator::Generator(const Generator::Params& p) :
     std::vector<MatrixXd> Rho_h = _bezier.get_vec_input_sampling(h_samples);
     std::vector<MatrixXd> Rho_ts = _bezier.get_vec_input_sampling(ts_samples);
 
+    _Rho_position = Rho_ts[0];
+
     // Get the matrices that propagate the input (i.e., optimization result) using the model
     _Lambda_pred = _model_pred.get_lambda(_k_hor);
     _A0_pred = _model_pred.get_A0(_k_hor);
@@ -130,22 +132,30 @@ void Generator::set_error_penalty_mats(const TuningParams& p, const MatrixXd& pf
 
 }
 
-Constraint Generator::build_ineq_constr(const PhysLimits& limits) {
+InequalityConstraint Generator::build_ineq_constr(const PhysLimits& limits) {
     // Get position constraint
-    VectorXd pos_samples = VectorXd::LinSpaced(_k_hor / 4, _h, _h + floor(_k_hor / 4) * _h * _l);
-    Constraint lim_pos = _bezier.limit_derivative(0, pos_samples, limits.pmin, limits.pmax);
+    VectorXd pos_samples = VectorXd::LinSpaced(_k_hor - 1, _h, (_k_hor - 1) * _h );
+    cout << pos_samples << endl;
+    InequalityConstraint lim_pos = _bezier.limit_derivative(0, pos_samples, limits.pmin, limits.pmax);
 
     // Get acceleration constraint
-    VectorXd acc_samples = VectorXd::LinSpaced(_k_hor / 2, _h, (_k_hor - 1) * _h);
-    Constraint lim_acc = _bezier.limit_derivative(2, acc_samples, limits.amin, limits.amax);
+    VectorXd acc_samples = VectorXd::LinSpaced(_k_hor - 1, _h, (_k_hor - 1) * _h);
+    InequalityConstraint lim_acc = _bezier.limit_derivative(2, acc_samples, limits.amin, limits.amax);
 
     // Assemble the constraints
-    Constraint ineq;
-    ineq.A = MatrixXd::Zero(lim_pos.A.rows() + lim_acc.A.rows(), lim_pos.A.cols());
-    ineq.b = VectorXd::Zero(lim_pos.b.size() + lim_acc.b.size());
+    InequalityConstraint ineq;
+    ineq.A_full = MatrixXd::Zero(lim_pos.A_full.rows() + lim_acc.A_full.rows(), lim_pos.A_full.cols());
+    ineq.b_full = VectorXd::Zero(lim_pos.b_full.size() + lim_acc.b_full.size());
+    ineq.A_full << lim_acc.A_full, lim_pos.A_full;
+    ineq.b_full << lim_acc.b_full, lim_pos.b_full;
 
-    ineq.A << lim_pos.A, lim_acc.A;
-    ineq.b << lim_pos.b, lim_acc.b;
+    ineq.A = MatrixXd::Zero(lim_pos.A.rows() + lim_acc.A.rows(), lim_pos.A.cols());
+    ineq.lower_bound = VectorXd::Zero(lim_pos.lower_bound.size() + lim_acc.lower_bound.size());
+    ineq.upper_bound = VectorXd::Zero(lim_pos.upper_bound.size() + lim_acc.upper_bound.size());
+
+    ineq.A << lim_acc.A, lim_pos.A;
+    ineq.lower_bound << lim_acc.lower_bound, lim_pos.lower_bound;
+    ineq.upper_bound << lim_acc.upper_bound, lim_pos.upper_bound;
 
     return ineq;
 }
@@ -195,7 +205,7 @@ void Generator::get_next_inputs(const vector<State3D>& curr_states) {
 
     // Launch all the threads to get the next set of inputs
     for (int i = 0; i < _cluster.size(); i++) {
-        _t[i] = std::thread{&Generator::solve_cluster, this, ref(curr_states), _cluster[i]};
+        _t[i] = std::thread(&Generator::solve_cluster, this, ref(curr_states), _cluster[i]);
     }
 
     for (int i = 0; i < _cluster.size(); ++i)
@@ -216,8 +226,22 @@ void Generator::solve_cluster(const std::vector<State3D> &curr_states,
         // We need to increase the size of other matrices if collision constraints are included
         QuadraticProblem problem = build_qp(collision, curr_states[i], i);
 
-        // solve QP and get solution vector x
-        // transform solution vector into position state horizon - update _new_horizon
+        // Create a new solver pointer of base class
+        unique_ptr<BaseSolver> solver = make_unique<OOQP>();
+
+        // Solve QP and get solution vector x
+        bool solvedOK = solver->solveQP(problem);
+
+        if (solvedOK){
+            // Extract solution and update horizon
+            VectorXd solution = solver->getSolution();
+            cout << solution << endl;
+        }
+        else {
+            // QP failed - repeat previous solution
+
+        }
+
     }
 }
 
@@ -225,24 +249,34 @@ QuadraticProblem Generator::build_qp(const Constraint& collision, const State3D&
                                      int agent_id) {
     // Determine if a collision happened, based on the size of the constraint
     int num_neigh = collision.b.size() / 2;
-    int num_vars = _ineq.A.cols() + num_neigh;
-    int num_ineq = _ineq.A.rows() + 2 * num_neigh;
+    int num_vars = _ineq.A_full.cols() + num_neigh;
+    int num_ineq = _ineq.A_full.rows() + 2 * num_neigh;
     int num_eq = _eq.A.rows();
 
-    MatrixXd Ain = MatrixXd::Zero(num_ineq, num_vars);
+    MatrixXd Ain_full = MatrixXd::Zero(num_ineq, num_vars);
+    MatrixXd Ain = MatrixXd::Zero(_ineq.A.rows() + 2 * num_neigh, num_vars);
     MatrixXd Aeq = MatrixXd::Zero(num_eq, num_vars);
     MatrixXd H = MatrixXd::Zero(num_vars, num_vars);
-    VectorXd bin = VectorXd::Zero(num_ineq);
+    VectorXd bin_full = VectorXd::Zero(num_ineq);
+    VectorXd bin_lower = VectorXd::Zero(_ineq.A.rows() + 2 * num_neigh);
+    VectorXd bin_upper = VectorXd::Zero(_ineq.A.rows() + 2 * num_neigh);
     VectorXd beq = VectorXd::Zero(num_eq);
     VectorXd f = VectorXd::Zero(num_vars);
     VectorXd x0 = VectorXd::Zero(2 * _dim);
     x0 << state.pos, state.vel;
 
+    Ain_full << _ineq.A_full, MatrixXd::Zero(_ineq.A_full.rows(), num_neigh),
+                collision.A;
+
     Ain << _ineq.A, MatrixXd::Zero(_ineq.A.rows(), num_neigh),
             collision.A;
 
-    bin << _ineq.b, collision.b;
+    bin_lower << _ineq.lower_bound, -50*VectorXd::Ones(num_neigh), -50*VectorXd::Ones(num_neigh);
+    bin_upper << _ineq.upper_bound, collision.b;
+
+    bin_full << _ineq.b_full, collision.b;
     Aeq << _eq.A, MatrixXd::Zero(num_eq, num_neigh);
+
     for (int i = 0; i < _deg_poly + 1; i++)
         beq.segment(_dim * i * _l, _dim) = _x0_ref[agent_id].col(i);
 
@@ -259,7 +293,7 @@ QuadraticProblem Generator::build_qp(const Constraint& collision, const State3D&
         f << -2 * (_fpf_free[agent_id] - x0.transpose() * _Hlin_f).transpose();
     }
 
-    QuadraticProblem problem = {H, Aeq, Ain, f, beq, bin};
+    QuadraticProblem problem = {H, Aeq, Ain_full, Ain, f, beq, bin_full, bin_lower, bin_upper};
     return problem;
 }
 

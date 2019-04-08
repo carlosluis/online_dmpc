@@ -18,6 +18,9 @@ include_directories(
 message("-- Eigen library directory: ${EIGEN3_INCLUDE_DIR}")
 message("-- Source path: ${PROJECT_SOURCE_DIR}")
 
+set(OOQP_LIBS ooqpbase ooqpdense ooqpgensparse ooqpmehrotra ooqpbound
+		ooqpgendense ooqpgondzio ooqpsparse blas ma27 gfortran)
+
 add_executable(run
 	src/main.cpp
 )
@@ -43,6 +46,8 @@ target_link_libraries(generator
 	solver
 	pthread
 	eigen-quadprog
+	ooqpei
+	${OOQP_LIBS}
 	model)
 
 target_link_libraries(run

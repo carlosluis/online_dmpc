@@ -29,7 +29,7 @@ struct CollisionConstraint {
 class BaseAvoider {
 public:
     BaseAvoider(){};
-    ~BaseAvoider(){};
+    virtual ~BaseAvoider(){};
 
     virtual Constraint get_coll_constr(const State3D& state, int agent_id) = 0;
 };
@@ -38,6 +38,7 @@ class OndemandAvoider : public BaseAvoider {
 public:
     OndemandAvoider (const std::vector<Eigen::MatrixXd>& horizon, const Eigen::MatrixXd& Phi_pos,
                      const Eigen::MatrixXd& A0_pos, const std::vector<EllipseParams>& p);
+    ~OndemandAvoider(){};
 
     Constraint get_coll_constr(const State3D& state, int agent_id);
 

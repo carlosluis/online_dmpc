@@ -13,6 +13,14 @@ struct Constraint {
     Eigen::VectorXd b;
 };
 
+struct InequalityConstraint {
+    Eigen::MatrixXd A_full;
+    Eigen::VectorXd b_full;
+    Eigen::MatrixXd A;
+    Eigen::VectorXd lower_bound;
+    Eigen::VectorXd upper_bound;
+};
+
 class BezierCurve {
 public:
     struct Params{
@@ -35,7 +43,7 @@ public:
 
     std::vector<Eigen::MatrixXd> derivate_ctrl_pts();
 
-    Constraint limit_derivative(int degree, Eigen::VectorXd t_samples,
+    InequalityConstraint limit_derivative(int degree, Eigen::VectorXd t_samples,
                                 Eigen::VectorXd min, Eigen::VectorXd max);
 
     Eigen::MatrixXd get_mat_eq_constr (int deg_poly);

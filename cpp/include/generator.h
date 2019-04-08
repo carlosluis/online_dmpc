@@ -9,7 +9,6 @@
 #include "model.h"
 #include "avoidance.h"
 #include "solver.h"
-#include "eigen-quadprog/src/QuadProg.h"
 #include <thread>
 
 struct PhysLimits {
@@ -74,13 +73,16 @@ private:
     DoubleIntegrator3D _model_pred;
     DoubleIntegrator3D _model_exec;
     Eigen::MatrixXd _H_energy;
-    Constraint _ineq;
+    InequalityConstraint _ineq;
     Constraint _eq;
 
     // Variables related to multithreading and clustering
     const int _max_clusters;
     std::vector<std::thread> _t;
     std::vector<std::vector<int>> _cluster;
+
+    // Matrix that samples the input for t in [t0, t0 + h], with sampling time ts
+    Eigen::MatrixXd _Rho_position;
 
     // State propagators using the model
     StatePropagator _Lambda_pred;
@@ -92,6 +94,8 @@ private:
 
     // Collision avoidance module
     std::unique_ptr<BaseAvoider> _avoider;
+
+    // QP solver moduler
 
     // Matrices and vectors to minimize goal error
     Eigen::MatrixXd _H_f;
@@ -110,7 +114,7 @@ private:
 
     // Methods
     void init_generator();
-    Constraint build_ineq_constr(const PhysLimits& lim);
+    InequalityConstraint build_ineq_constr(const PhysLimits& lim);
     void set_error_penalty_mats(const TuningParams& p, const Eigen::MatrixXd& pf);
     void init_clusters();
     Eigen::MatrixXd get_init_ref(const State3D& state, const Eigen::MatrixXd& ref);

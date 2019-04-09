@@ -40,6 +40,9 @@ add_library(solver
 add_library(generator
 	src/generator.cpp)
 
+add_library(simulator
+	src/simulator.cpp)
+
 target_link_libraries(generator
 	bezier
 	avoidance
@@ -50,7 +53,10 @@ target_link_libraries(generator
 	${OOQP_LIBS}
 	model)
 
+target_link_libraries(simulator
+	generator)
+
 target_link_libraries(run
-	generator
+	simulator
 )
 

@@ -73,3 +73,12 @@ DoubleIntegrator3D::DoubleIntegrator3D(float ts, const DoubleIntegrator3D::Param
                 0, ts * pow(omega_xy, 2), 0,
                 0, 0, ts * pow(omega_z, 2);
 }
+
+State3D DoubleIntegrator3D::applyInput(const State3D &states, const VectorXd &u) {
+    VectorXd initial_states = VectorXd::Zero(6);
+    initial_states << states.pos, states.vel;
+
+    VectorXd new_states = _model_A * initial_states + _model_B * u;
+    State3D result = {new_states.segment(0, 3), new_states.segment(3, 3)};
+    return result;
+}

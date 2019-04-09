@@ -1,13 +1,42 @@
 #include <iostream>
 #include <Eigen/Dense>
-#include "generator.h"
+#include "simulator.h"
 
 using namespace std;
 using namespace Eigen;
 using namespace std::chrono;
 
+Simulator::Params getSimulationParams();
+
 int main() {
 	cout << "Hello world!" << endl;
+
+    Simulator::Params sim_params = getSimulationParams();
+    Simulator sim(sim_params);
+
+    int T = 20; // simulation duration
+//    sim.run(T);
+
+//    State3D agent1 = {.pos = po1, .vel = 0.001*VectorXd::Ones(dim)};
+//    State3D agent2 = {.pos = po2, .vel = 0.001*VectorXd::Ones(dim)};
+//    State3D agent3 = {.pos = po3, .vel = 0.001*VectorXd::Ones(dim)};
+//    State3D agent4 = {.pos = po4, .vel = 0.001*VectorXd::Ones(dim)};
+//    std::vector<State3D> curr_states{agent1, agent2, agent3, agent4};
+//
+//    high_resolution_clock::time_point t1 = high_resolution_clock::now();
+//
+//    gen.getNextInputs(curr_states);
+//
+//    high_resolution_clock::time_point t2 = high_resolution_clock::now();
+//    auto duration = duration_cast<microseconds>( t2 - t1 ).count();
+//    cout << "Next inputs computed in = "
+//         << duration/1000.0 << "ms" << endl << endl;
+
+	return 0;
+}
+
+Simulator::Params getSimulationParams() {
+    // In the future this function should be replaced by an appropriate read of a config file
 
     // Bezier curve params
     int d = 5;
@@ -25,8 +54,6 @@ int main() {
     DoubleIntegrator3D::Params model_params = {zeta_xy, tau_xy, zeta_z, tau_z};
 
     // MPC params
-
-    int T = 20; // sim duration
     int k_hor = 16; // horizon length
     float h = 0.2;
     float ts = 0.01;
@@ -83,63 +110,13 @@ int main() {
 
     // Testing the Generator class
     Generator::Params p = {bezier_params, model_params, ellipse_vec, mpc_params, po, pf};
-    Generator gen(p);
 
-    State3D agent1 = {.pos = po1, .vel = 0.001*VectorXd::Ones(dim)};
-    State3D agent2 = {.pos = po2, .vel = 0.001*VectorXd::Ones(dim)};
-    State3D agent3 = {.pos = po3, .vel = 0.001*VectorXd::Ones(dim)};
-    State3D agent4 = {.pos = po4, .vel = 0.001*VectorXd::Ones(dim)};
-    std::vector<State3D> curr_states{agent1, agent2, agent3, agent4};
+    // Noise levels from VICON system
+    float std_position = 0.00228682;
+    float std_vel = 0.0109302;
 
-    high_resolution_clock::time_point t1 = high_resolution_clock::now();
+    Simulator::Params psim = {p, std_position, std_vel};
 
-    gen.getNextInputs(curr_states);
-
-    high_resolution_clock::time_point t2 = high_resolution_clock::now();
-    auto duration = duration_cast<microseconds>( t2 - t1 ).count();
-    cout << "Next inputs computed in = "
-         << duration/1000.0 << "ms" << endl << endl;
-
-	return 0;
+    return psim;
 }
 
-MatrixXd gen_rand_pts(const int &N,
-                      const Vector3d &pmin,
-                      const Vector3d &pmax,
-                      const float &rmin) {
-    MatrixXd pts = MatrixXd::Zero(3, N);
-    Vector3d candidate = MatrixXd::Zero(3, 1);
-    VectorXd dist;
-    bool pass = false;
-
-    // Generate first point
-    pts.col(0) = pmin.array()
-                 + (pmax - pmin).array() *
-                   ((MatrixXd::Random(3, 1).array() + 1) / 2);
-
-    for (int n = 1; n < N; ++n) {
-        while (!pass) {
-            // Candidate picked randomly within workspace boundaries
-            candidate = pmin.array()
-                        + (pmax - pmin).array() *
-                          ((MatrixXd::Random(3, 1).array() + 1) / 2);
-
-            // Calculate distance to every previous pts calculated
-            dist = ((((pts.leftCols(n)).colwise()
-                      -
-                      candidate).array().square()).colwise().sum()).array().sqrt();
-
-            // If the candidate is sufficiently separated from previous pts,
-            // then we add it to the Matrix of valid pts
-            for (int k = 0; k < n; ++k) {
-                pass = dist[k] > rmin;
-                if (!pass)
-                    break;
-            }
-            if (pass)
-                pts.col(n) = candidate.array();
-        }
-        pass = false;
-    }
-    return pts;
-}

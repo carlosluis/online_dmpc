@@ -203,11 +203,11 @@ void Generator::initGenerator() {
     _newhorizon = _oldhorizon;
 }
 
-std::vector<MatrixXd> Generator::getNextInputs(const vector<State3D>& curr_states) {
+std::vector<MatrixXd> Generator::getNextInputs(const vector<State3D>& current_states) {
 
     // Launch all the threads to get the next set of inputs
     for (int i = 0; i < _cluster.size(); i++)
-        _t[i] = std::thread(&Generator::solveCluster, this, ref(curr_states), _cluster[i]);
+        _t[i] = std::thread(&Generator::solveCluster, this, ref(current_states), _cluster[i]);
 
     // Wait for all agents to solve the optimization
     for (int i = 0; i < _cluster.size(); ++i)
@@ -219,17 +219,17 @@ std::vector<MatrixXd> Generator::getNextInputs(const vector<State3D>& curr_state
     return _next_inputs;
 }
 
-void Generator::solveCluster(const std::vector<State3D> &curr_states,
+void Generator::solveCluster(const std::vector<State3D> &current_states,
                               const std::vector<int> &agents) {
 
     VectorXd err_pos, cost, denominator;
     for (int i = agents.front(); i <= agents.back(); i++) {
         // Pick initial condition for the reference
-        _x0_ref[i] = getInitialReference(curr_states[i], _x0_ref[i]);
+        _x0_ref[i] = getInitialReference(current_states[i], _x0_ref[i]);
 
         // Build collision constraint
 //        high_resolution_clock::time_point t1 = high_resolution_clock::now();
-        Constraint collision = _avoider->getCollisionConstraint(curr_states[i], i);
+        Constraint collision = _avoider->getCollisionConstraint(current_states[i], i);
 //        high_resolution_clock::time_point t2 = high_resolution_clock::now();
 //        auto duration = duration_cast<microseconds>( t2 - t1 ).count();
 //        cout << "Time building constraint = "
@@ -237,7 +237,7 @@ void Generator::solveCluster(const std::vector<State3D> &curr_states,
 
         // We need to increase the size of other matrices if collision constraints are included
 //        t1 = high_resolution_clock::now();
-        QuadraticProblem problem = buildQP(collision, curr_states[i], i);
+        QuadraticProblem problem = buildQP(collision, current_states[i], i);
 //        t2 = high_resolution_clock::now();
 //        duration = duration_cast<microseconds>( t2 - t1 ).count();
 //        cout << "Time assembling QP = "
@@ -265,7 +265,7 @@ void Generator::solveCluster(const std::vector<State3D> &curr_states,
 
             // Update horizon for the agent
 //            t1 = high_resolution_clock::now();
-            _newhorizon[i] = updateHorizon(u, curr_states[i]);
+            _newhorizon[i] = updateHorizon(u, current_states[i]);
 //            t2 = high_resolution_clock::now();
 //            duration = duration_cast<microseconds>( t2 - t1 ).count();
 //            cout << "Time updating horizon = "

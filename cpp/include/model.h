@@ -39,6 +39,7 @@ public:
     };
     DoubleIntegrator3D (float time_step, const DoubleIntegrator3D::Params& p);
     ~DoubleIntegrator3D(){};
+    State3D applyInput(const State3D& states, const Eigen::VectorXd& u);
 };
 
 class DoubleIntegrator2D : public DoubleIntegrator {

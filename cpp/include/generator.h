@@ -43,7 +43,7 @@ public:
     ~Generator(){};
 
     // Public methods
-    std::vector<Eigen::MatrixXd> getNextInputs(const std::vector<State3D>& curr_states);
+    std::vector<Eigen::MatrixXd> getNextInputs(const std::vector<State3D>& current_states);
 
 
 private:

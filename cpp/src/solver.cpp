@@ -29,6 +29,5 @@ bool OOQP::solveQP(const QuadraticProblem& problem) {
                                                     problem.Aeq.sparseView(), problem.beq,
                                                     problem.Ain.sparseView(), problem.bin_lower,
                                                     problem.bin_upper,  _solution);
-    std::cout << _solution << std::endl;
     return status;
 }

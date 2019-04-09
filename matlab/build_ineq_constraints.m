@@ -18,7 +18,7 @@ Beta_acc = mat_bernstein2power(d-2, l, ndim);
 % Define Tau_acc that evaluates the polynomial at different times
 % Define the times at which we desire to sample between 0s and 2.4s
 % NOTE: Always constrain the first 
-t_sample_acc = h:(h): (K-1)*h;
+t_sample_acc = h:(2*h): (K-1)*h;
 Tau_acc = mat_sample_poly(T_segment, t_sample_acc, d-2, l);
 
 % Now we compose the constraint in (A,b) form to pass to the solver
@@ -30,7 +30,7 @@ b_in_acc = [phys_limits.amax*ones(3*length(t_sample_acc), 1);
            -phys_limits.amin*ones(3*length(t_sample_acc), 1)];
 
 % POSITION REFERENCE CONSTRAINT - WORKSPACE BOUNDARIES
-t_sample_pos_ref = h:(h) : (K-1)*h;
+t_sample_pos_ref = h:(3*h) : (K-1)*h;
 Tau_pos_ref = mat_sample_poly(T_segment, t_sample_pos_ref, d, l);
 
 % Now we compose the constraint in (A,b) form to pass to the solver

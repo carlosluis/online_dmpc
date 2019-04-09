@@ -82,7 +82,8 @@ private:
     std::vector<std::vector<int>> _cluster;
 
     // Matrix that samples the input for t in [t0, t0 + h], with sampling time ts
-    Eigen::MatrixXd _Rho_position;
+    Eigen::MatrixXd _Rho_pos_ts;
+    std::vector<Eigen::MatrixXd> _Rho_h;
 
     // State propagators using the model
     StatePropagator _Lambda_pred;
@@ -112,6 +113,9 @@ private:
     std::vector<Eigen::MatrixXd> _oldhorizon;
     std::vector<Eigen::MatrixXd> _x0_ref;
 
+    // Next inputs for the agents, samples @ ts between to and to + h
+    std::vector<Eigen::MatrixXd> _next_inputs;
+
     // Methods
     void init_generator();
     InequalityConstraint build_ineq_constr(const PhysLimits& lim);
@@ -124,6 +128,23 @@ private:
     QuadraticProblem build_qp(const Constraint& collision, const State3D& state,
                               int agent_id);
 
+    Eigen::MatrixXd updateHorizon(const Eigen::VectorXd& u, const State3D& states);
+    Eigen::MatrixXd updateInitialReference(const Eigen::VectorXd& u);
+    Eigen::MatrixXd updateNextInputs(const Eigen::MatrixXd& u);
+
 };
+
+static Eigen::MatrixXd vec2mat(const Eigen::VectorXd& vec, int dim) {
+    assert(("Dimension mismatch between vector and dimension for vec2mat", vec.size() % dim == 0));
+    int cols = vec.size() / dim;
+    Eigen::MatrixXd result = Eigen::MatrixXd::Zero(dim, cols);
+    int idx = 0;
+    for (int i = 0; i < cols; i++){
+        result.col(i) = vec.segment(idx, dim);
+        idx += dim;
+    }
+
+    return result;
+}
 
 #endif //ONLINE_PLANNING_GENERATOR_H

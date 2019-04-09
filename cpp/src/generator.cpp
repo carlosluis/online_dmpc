@@ -35,8 +35,8 @@ Generator::Generator(const Generator::Params& p) :
     // Define two time bases:
     // 1) h_samples is the time base for the planning of trajectories
     // 2) ts_samples is a finer base for the execution in-between planning updates
-    VectorXd h_samples = VectorXd::LinSpaced(_k_hor, 0, (_k_hor - 1) * _h);
     VectorXd ts_samples = VectorXd::LinSpaced(_h / _Ts, 0, _h - _Ts);
+    VectorXd h_samples = VectorXd::LinSpaced(_k_hor, 0, (_k_hor - 1) * _h);
 
     // Energy cost function associated Hessian matrix
     _H_energy = _bezier.get_mat_energy_cost(p.mpc_params.tuning.energy_weights);
@@ -44,10 +44,9 @@ Generator::Generator(const Generator::Params& p) :
     _num_ctrl_pts = _H_energy.rows();
 
     // Get the matrices that sample the optimization result according to the 2 time bases
-    std::vector<MatrixXd> Rho_h = _bezier.get_vec_input_sampling(h_samples);
+    _Rho_h = _bezier.get_vec_input_sampling(h_samples);
     std::vector<MatrixXd> Rho_ts = _bezier.get_vec_input_sampling(ts_samples);
-
-    _Rho_position = Rho_ts[0];
+    _Rho_pos_ts = Rho_ts[0];
 
     // Get the matrices that propagate the input (i.e., optimization result) using the model
     _Lambda_pred = _model_pred.get_lambda(_k_hor);
@@ -56,8 +55,8 @@ Generator::Generator(const Generator::Params& p) :
     _A0_exec = _model_exec.get_A0(_h / _Ts);
 
     // Create new matrices that map bezier curve control points to states of the robot
-    _Phi_pred.pos = _Lambda_pred.pos * Rho_h.at(0);
-    _Phi_pred.vel = _Lambda_pred.vel * Rho_h.at(0);
+    _Phi_pred.pos = _Lambda_pred.pos * _Rho_h.at(0);
+    _Phi_pred.vel = _Lambda_pred.vel * _Rho_h.at(0);
     _Phi_exec.pos = _Lambda_exec.pos * Rho_ts.at(0);
     _Phi_exec.vel = _Lambda_exec.vel * Rho_ts.at(0);
 
@@ -134,12 +133,12 @@ void Generator::set_error_penalty_mats(const TuningParams& p, const MatrixXd& pf
 
 InequalityConstraint Generator::build_ineq_constr(const PhysLimits& limits) {
     // Get position constraint
-    VectorXd pos_samples = VectorXd::LinSpaced(_k_hor - 1, _h, (_k_hor - 1) * _h );
-    cout << pos_samples << endl;
+    VectorXd pos_samples = VectorXd::LinSpaced((_k_hor)/2, _h, (_k_hor - 1) * _h );
+//    cout << pos_samples << endl;
     InequalityConstraint lim_pos = _bezier.limit_derivative(0, pos_samples, limits.pmin, limits.pmax);
 
     // Get acceleration constraint
-    VectorXd acc_samples = VectorXd::LinSpaced(_k_hor - 1, _h, (_k_hor - 1) * _h);
+    VectorXd acc_samples = VectorXd::LinSpaced((_k_hor)/2, _h, (_k_hor - 1) * _h);
     InequalityConstraint lim_acc = _bezier.limit_derivative(2, acc_samples, limits.amin, limits.amax);
 
     // Assemble the constraints
@@ -186,6 +185,7 @@ void Generator::init_clusters() {
 
 void Generator::init_generator() {
     _x0_ref.reserve(_Ncmd);
+    _next_inputs.reserve(_Ncmd);
     _newhorizon.reserve(_N);
     _oldhorizon.reserve(_N);
     MatrixXd pos_aux = MatrixXd::Zero(_dim, _k_hor);
@@ -197,6 +197,7 @@ void Generator::init_generator() {
         init_ref << poi, voi, MatrixXd::Zero(_dim, _d - 1);
         _x0_ref.push_back(init_ref);
         _oldhorizon.push_back(poi.replicate(1, _k_hor));
+        _next_inputs.push_back(poi.replicate(1, _h / _Ts));
     }
     _newhorizon = _oldhorizon;
 }
@@ -210,6 +211,8 @@ void Generator::get_next_inputs(const vector<State3D>& curr_states) {
 
     for (int i = 0; i < _cluster.size(); ++i)
         _t[i].join();
+
+    _oldhorizon = _newhorizon;
 }
 
 void Generator::solve_cluster(const std::vector<State3D> &curr_states,
@@ -233,9 +236,22 @@ void Generator::solve_cluster(const std::vector<State3D> &curr_states,
         bool solvedOK = solver->solveQP(problem);
 
         if (solvedOK){
-            // Extract solution and update horizon
+            cout << "Solution OK for agent " << i << endl;
+
+            // Extract solution
             VectorXd solution = solver->getSolution();
-            cout << solution << endl;
+
+            // Strip away the slack variables from the solution
+            VectorXd u = solution.head(_num_ctrl_pts);
+
+            // Update horizon for the agent
+            _newhorizon[i] = updateHorizon(u, curr_states[i]);
+
+            // Update the initial condition for the next optimization
+            _x0_ref[i] = updateInitialReference(u);
+
+            // Update the next input sequence for agent i
+            _next_inputs[i] = vec2mat(_Rho_pos_ts * u, _dim);
         }
         else {
             // QP failed - repeat previous solution
@@ -265,6 +281,7 @@ QuadraticProblem Generator::build_qp(const Constraint& collision, const State3D&
     VectorXd x0 = VectorXd::Zero(2 * _dim);
     x0 << state.pos, state.vel;
 
+    // Build the complete inequality constraint
     Ain_full << _ineq.A_full, MatrixXd::Zero(_ineq.A_full.rows(), num_neigh),
                 collision.A;
 
@@ -277,10 +294,11 @@ QuadraticProblem Generator::build_qp(const Constraint& collision, const State3D&
     bin_full << _ineq.b_full, collision.b;
     Aeq << _eq.A, MatrixXd::Zero(num_eq, num_neigh);
 
+    // build the constant vector for the equality constraint
     for (int i = 0; i < _deg_poly + 1; i++)
         beq.segment(_dim * i * _l, _dim) = _x0_ref[agent_id].col(i);
 
-
+    // Augment matrices in case of collisions to account for the additional slack variables
     if (collision.b.size() > 0) {
         MatrixXd H_eps = _quad_coll * MatrixXd::Identity(num_neigh, num_neigh);
         VectorXd f_eps = _lin_coll * VectorXd::Ones(num_neigh);
@@ -293,6 +311,7 @@ QuadraticProblem Generator::build_qp(const Constraint& collision, const State3D&
         f << -2 * (_fpf_free[agent_id] - x0.transpose() * _Hlin_f).transpose();
     }
 
+    // Assemble the problem and return it
     QuadraticProblem problem = {H, Aeq, Ain_full, Ain, f, beq, bin_full, bin_lower, bin_upper};
     return problem;
 }
@@ -309,4 +328,19 @@ MatrixXd Generator::get_init_ref(const State3D &state, const MatrixXd& ref) {
         return new_ref;
     }
     else return ref;
+}
+
+MatrixXd Generator::updateHorizon(const Eigen::VectorXd &u, const State3D& states) {
+
+    VectorXd initial_states = VectorXd::Zero(2 * _dim);
+    initial_states << states.pos, states.vel;
+    return vec2mat(_Phi_pred.pos * u + _A0_pred.pos * initial_states, _dim);
+}
+
+MatrixXd Generator::updateInitialReference(const Eigen::VectorXd &u) {
+    MatrixXd init_ref = MatrixXd::Zero(_dim, _d + 1);
+    for (int r = 0; r < _d + 1; r++)
+        init_ref.col(r) =  _Rho_h[r].middleRows(_dim, _dim) * u;
+
+    return init_ref;
 }

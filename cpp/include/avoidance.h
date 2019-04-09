@@ -31,7 +31,7 @@ public:
     BaseAvoider(){};
     virtual ~BaseAvoider(){};
 
-    virtual Constraint get_coll_constr(const State3D& state, int agent_id) = 0;
+    virtual Constraint getCollisionConstraint(const State3D& state, int agent_id) = 0;
 };
 
 class OndemandAvoider : public BaseAvoider {
@@ -40,7 +40,7 @@ public:
                      const Eigen::MatrixXd& A0_pos, const std::vector<EllipseParams>& p);
     ~OndemandAvoider(){};
 
-    Constraint get_coll_constr(const State3D& state, int agent_id);
+    Constraint getCollisionConstraint(const State3D& state, int agent_id);
 
 
 private:
@@ -58,9 +58,10 @@ private:
     int _dim;
 
     // Private methods
-    std::vector<bool> check_collisions(int agent_id, int k);
-    CollisionConstraint build_coll_constr(int agent_id, int k, const std::vector<bool>& neighbours,
-                                          const State3D& state);
+    std::vector<bool> checkCollisions(int agent_id, int k);
+    CollisionConstraint buildCollisionConstraint(int agent_id, int k,
+                                                 const std::vector<bool>& neighbours,
+                                                 const State3D& state);
 };
 
 #endif //ONLINE_PLANNING_AVOIDANCE_H

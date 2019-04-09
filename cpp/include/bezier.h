@@ -31,38 +31,34 @@ public:
 	BezierCurve(const BezierCurve::Params& p);
 	~BezierCurve(){};
 
-    // Public variables
-    Eigen::MatrixXd T_pts_poly;
-
 	// Public methods
-    void set_ctrl_pts(Eigen::VectorXd x);
 
-    std::vector<Eigen::MatrixXd> get_vec_input_sampling(Eigen::VectorXd t_samples);
+    std::vector<Eigen::MatrixXd> getMatrixInputDerivativeSampling(const Eigen::VectorXd& t_samples);
 
-    Eigen::MatrixXd get_mat_energy_cost(Eigen::VectorXd weights);
+    Eigen::MatrixXd getMatrixEnergyCost(const Eigen::VectorXd& weights);
 
-    std::vector<Eigen::MatrixXd> derivate_ctrl_pts();
+    InequalityConstraint limitDerivative(int degree, const Eigen::VectorXd& t_samples,
+                                         const Eigen::VectorXd& min, const Eigen::VectorXd& max);
 
-    InequalityConstraint limit_derivative(int degree, Eigen::VectorXd t_samples,
-                                Eigen::VectorXd min, Eigen::VectorXd max);
-
-    Eigen::MatrixXd get_mat_eq_constr (int deg_poly);
+    Eigen::MatrixXd getMatrixEqualityConstraint (int deg_poly);
 
 private:
     // Methods
-    Eigen::MatrixXd bernstein_to_power(int deg);
-    Eigen::MatrixXd increase_matrix_dim(Eigen::MatrixXd matrix, int dim);
+    Eigen::MatrixXd bernsteinToPowerBasis(int deg);
+    Eigen::MatrixXd increaseMatrixDimension(const Eigen::MatrixXd& matrix, int dim);
 
-    Eigen::MatrixXd get_mat_sumsqrd_der(Eigen::VectorXd weights);
+    Eigen::MatrixXd getMatrixSumSqrdDerivatives(const Eigen::VectorXd& weights);
 
-    Eigen::MatrixXd get_mat_poly_sampling(Eigen::VectorXd t_samples, int deg);
+    Eigen::MatrixXd getMatrixPolynomeSampling(const Eigen::VectorXd& t_samples, int deg);
 
-    Eigen::MatrixXd build_mat_poly_sampling(std::vector<Eigen::MatrixXd> Tau,
-                                          int num_samples, int deg);
+    Eigen::MatrixXd buildMatrixPolynomeSampling(const std::vector<Eigen::MatrixXd>& Tau,
+                                                int num_samples, int deg);
 
-    Eigen::MatrixXd augmented_form(Eigen::MatrixXd mat);
+    Eigen::MatrixXd augmentMatrixForm(const Eigen::MatrixXd& mat);
 
-    Eigen::MatrixXd get_mat_input_sampling(Eigen::VectorXd t_samples, int r);
+    Eigen::MatrixXd getMatrixInputSampling(const Eigen::VectorXd& t_samples, int r);
+
+    std::vector<Eigen::MatrixXd> derivateControlPoints();
 
     // Variables
     int _deg;
@@ -78,7 +74,7 @@ private:
 };
 
 // Helper function to shift an Eigen vector n positions to the right, zero-padding
-static Eigen::VectorXd shift_vector(Eigen::VectorXd vec, int n) {
+static Eigen::VectorXd shiftVector(Eigen::VectorXd vec, int n) {
     int size = vec.size();
     Eigen::VectorXd shifted_vec = Eigen::VectorXd::Zero(size);
     shifted_vec.segment(n, size-n) = vec.segment(0, size-n);

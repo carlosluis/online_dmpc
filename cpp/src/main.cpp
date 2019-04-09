@@ -4,6 +4,7 @@
 
 using namespace std;
 using namespace Eigen;
+using namespace std::chrono;
 
 int main() {
 	cout << "Hello world!" << endl;
@@ -52,7 +53,7 @@ int main() {
     limits.amax = (Eigen::Vector3d() << 1.0, 1.0, 1.0).finished();
 
     // Number of agents to control
-    int N = 2;
+    int N = 4;
 
     // Collision constraint for an agent
     EllipseParams ellipse_params;
@@ -68,13 +69,17 @@ int main() {
 
     MatrixXd po = MatrixXd::Zero(3, N);
     Vector3d po1 = (Eigen::Vector3d() << -1.0, -1.0, 1.0).finished();
-    Vector3d po2 = (Eigen::Vector3d() << -1.0, -0.8, 1.0).finished();
-    po << po1, po2;
+    Vector3d po2 = (Eigen::Vector3d() << 1.0, 1.0, 1.0).finished();
+    Vector3d po3 = (Eigen::Vector3d() << -1.0, 1.0, 1.0).finished();
+    Vector3d po4 = (Eigen::Vector3d() << 1.0, -1.0, 1.0).finished();
+    po << po1, po2, po3, po4;
 
     MatrixXd pf = MatrixXd::Zero(3, N);
     Vector3d pf1 = (Eigen::Vector3d() << 1.0, 1.0, 1.0).finished();
     Vector3d pf2 = (Eigen::Vector3d() << -1.0, -1.0, 1.0).finished();
-    pf << pf1, pf2;
+    Vector3d pf3 = (Eigen::Vector3d() << 1.0, -1.0, 1.0).finished();
+    Vector3d pf4 = (Eigen::Vector3d() << -1.0, 1.0, 1.0).finished();
+    pf << pf1, pf2, pf3, pf4;
 
     // Testing the Generator class
     Generator::Params p = {bezier_params, model_params, ellipse_vec, mpc_params, po, pf};
@@ -82,8 +87,18 @@ int main() {
 
     State3D agent1 = {.pos = po1, .vel = 0.001*VectorXd::Ones(dim)};
     State3D agent2 = {.pos = po2, .vel = 0.001*VectorXd::Ones(dim)};
-    std::vector<State3D> curr_states{agent1, agent2};
-    gen.get_next_inputs(curr_states);
+    State3D agent3 = {.pos = po3, .vel = 0.001*VectorXd::Ones(dim)};
+    State3D agent4 = {.pos = po4, .vel = 0.001*VectorXd::Ones(dim)};
+    std::vector<State3D> curr_states{agent1, agent2, agent3, agent4};
+
+    high_resolution_clock::time_point t1 = high_resolution_clock::now();
+
+    gen.getNextInputs(curr_states);
+
+    high_resolution_clock::time_point t2 = high_resolution_clock::now();
+    auto duration = duration_cast<microseconds>( t2 - t1 ).count();
+    cout << "Next inputs computed in = "
+         << duration/1000.0 << "ms" << endl << endl;
 
 	return 0;
 }

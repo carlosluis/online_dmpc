@@ -43,9 +43,7 @@ public:
     ~Generator(){};
 
     // Public methods
-//    void get_next_inputs();
-    void get_next_inputs(const std::vector<State3D>& curr_states);
-//    std::vector<Eigen::MatrixXd> get_next_inputs(const std::vector<State3D>& curr_states);
+    std::vector<Eigen::MatrixXd> getNextInputs(const std::vector<State3D>& curr_states);
 
 
 private:
@@ -96,8 +94,6 @@ private:
     // Collision avoidance module
     std::unique_ptr<BaseAvoider> _avoider;
 
-    // QP solver moduler
-
     // Matrices and vectors to minimize goal error
     Eigen::MatrixXd _H_f;
     Eigen::MatrixXd _H_o;
@@ -117,21 +113,21 @@ private:
     std::vector<Eigen::MatrixXd> _next_inputs;
 
     // Methods
-    void init_generator();
-    InequalityConstraint build_ineq_constr(const PhysLimits& lim);
-    void set_error_penalty_mats(const TuningParams& p, const Eigen::MatrixXd& pf);
-    void init_clusters();
-    Eigen::MatrixXd get_init_ref(const State3D& state, const Eigen::MatrixXd& ref);
-    void solve_cluster(const std::vector<State3D>& curr_states,
+    void initGenerator();
+    InequalityConstraint buildInequalityConstraint(const PhysLimits& limits);
+    void setErrorPenaltyMatrices(const TuningParams& p, const Eigen::MatrixXd& pf);
+    void initClusters();
+
+    Eigen::MatrixXd getInitialReference(const State3D& state, const Eigen::MatrixXd& ref);
+
+    void solveCluster(const std::vector<State3D>& curr_states,
                        const std::vector<int>& agents);
 
-    QuadraticProblem build_qp(const Constraint& collision, const State3D& state,
+    QuadraticProblem buildQP(const Constraint& collision, const State3D& state,
                               int agent_id);
 
     Eigen::MatrixXd updateHorizon(const Eigen::VectorXd& u, const State3D& states);
     Eigen::MatrixXd updateInitialReference(const Eigen::VectorXd& u);
-    Eigen::MatrixXd updateNextInputs(const Eigen::MatrixXd& u);
-
 };
 
 static Eigen::MatrixXd vec2mat(const Eigen::VectorXd& vec, int dim) {

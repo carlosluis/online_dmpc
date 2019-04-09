@@ -6,12 +6,13 @@
 
 using namespace std;
 using namespace Eigen;
+using namespace std::chrono;
 
 Generator::Generator(const Generator::Params& p) :
     _bezier(p.bezier_params),
     _model_pred(p.mpc_params.h, p.model_params),
     _model_exec(p.mpc_params.Ts, p.model_params),
-    _max_clusters(1),
+    _max_clusters(8),
     _max_cost(0.08),
     _min_cost(-0.01)
 {
@@ -39,13 +40,13 @@ Generator::Generator(const Generator::Params& p) :
     VectorXd h_samples = VectorXd::LinSpaced(_k_hor, 0, (_k_hor - 1) * _h);
 
     // Energy cost function associated Hessian matrix
-    _H_energy = _bezier.get_mat_energy_cost(p.mpc_params.tuning.energy_weights);
+    _H_energy = _bezier.getMatrixEnergyCost(p.mpc_params.tuning.energy_weights);
 
     _num_ctrl_pts = _H_energy.rows();
 
     // Get the matrices that sample the optimization result according to the 2 time bases
-    _Rho_h = _bezier.get_vec_input_sampling(h_samples);
-    std::vector<MatrixXd> Rho_ts = _bezier.get_vec_input_sampling(ts_samples);
+    _Rho_h = _bezier.getMatrixInputDerivativeSampling(h_samples);
+    std::vector<MatrixXd> Rho_ts = _bezier.getMatrixInputDerivativeSampling(ts_samples);
     _Rho_pos_ts = Rho_ts[0];
 
     // Get the matrices that propagate the input (i.e., optimization result) using the model
@@ -61,19 +62,19 @@ Generator::Generator(const Generator::Params& p) :
     _Phi_exec.vel = _Lambda_exec.vel * Rho_ts.at(0);
 
     // Build the inequality constraints regarding the physical limits of the robot
-    _ineq = build_ineq_constr(p.mpc_params.limits);
+    _ineq = buildInequalityConstraint(p.mpc_params.limits);
 
     // Build Aeq matrix for the equality constraints
-    _eq.A = _bezier.get_mat_eq_constr(p.bezier_params.deg_poly);
+    _eq.A = _bezier.getMatrixEqualityConstraint(p.bezier_params.deg_poly);
 
     // Set matrices to minimize goal error
-    set_error_penalty_mats(p.mpc_params.tuning, _pf);
+    setErrorPenaltyMatrices(p.mpc_params.tuning, _pf);
 
     // Create threads and clusters to solve in parallel
-    init_clusters();
+    initClusters();
 
     // Initialize several variables used to generate the trajectories
-    init_generator();
+    initGenerator();
 
     // Create the avoider object for collision avoidance
     _avoider = std::make_unique<OndemandAvoider>(_oldhorizon, _Phi_pred.pos,
@@ -81,7 +82,7 @@ Generator::Generator(const Generator::Params& p) :
 
 }
 
-void Generator::set_error_penalty_mats(const TuningParams& p, const MatrixXd& pf) {
+void Generator::setErrorPenaltyMatrices(const TuningParams &p, const Eigen::MatrixXd &pf){
 
     // Case 1: no collisions in the horizon - go fast
     MatrixXd S_free = MatrixXd::Zero(_dim * _k_hor, _dim * _k_hor);
@@ -131,15 +132,15 @@ void Generator::set_error_penalty_mats(const TuningParams& p, const MatrixXd& pf
 
 }
 
-InequalityConstraint Generator::build_ineq_constr(const PhysLimits& limits) {
+InequalityConstraint Generator::buildInequalityConstraint(const PhysLimits &limits){
     // Get position constraint
     VectorXd pos_samples = VectorXd::LinSpaced((_k_hor)/2, _h, (_k_hor - 1) * _h );
 //    cout << pos_samples << endl;
-    InequalityConstraint lim_pos = _bezier.limit_derivative(0, pos_samples, limits.pmin, limits.pmax);
+    InequalityConstraint lim_pos = _bezier.limitDerivative(0, pos_samples, limits.pmin, limits.pmax);
 
     // Get acceleration constraint
     VectorXd acc_samples = VectorXd::LinSpaced((_k_hor)/2, _h, (_k_hor - 1) * _h);
-    InequalityConstraint lim_acc = _bezier.limit_derivative(2, acc_samples, limits.amin, limits.amax);
+    InequalityConstraint lim_acc = _bezier.limitDerivative(2, acc_samples, limits.amin, limits.amax);
 
     // Assemble the constraints
     InequalityConstraint ineq;
@@ -159,7 +160,7 @@ InequalityConstraint Generator::build_ineq_constr(const PhysLimits& limits) {
     return ineq;
 }
 
-void Generator::init_clusters() {
+void Generator::initClusters() {
     int n_clusters = min(_Ncmd, _max_clusters);
     _t.resize(n_clusters);
     _cluster.resize(n_clusters);
@@ -183,7 +184,7 @@ void Generator::init_clusters() {
     }
 }
 
-void Generator::init_generator() {
+void Generator::initGenerator() {
     _x0_ref.reserve(_Ncmd);
     _next_inputs.reserve(_Ncmd);
     _newhorizon.reserve(_N);
@@ -202,38 +203,56 @@ void Generator::init_generator() {
     _newhorizon = _oldhorizon;
 }
 
-void Generator::get_next_inputs(const vector<State3D>& curr_states) {
+std::vector<MatrixXd> Generator::getNextInputs(const vector<State3D>& curr_states) {
 
     // Launch all the threads to get the next set of inputs
-    for (int i = 0; i < _cluster.size(); i++) {
-        _t[i] = std::thread(&Generator::solve_cluster, this, ref(curr_states), _cluster[i]);
-    }
+    for (int i = 0; i < _cluster.size(); i++)
+        _t[i] = std::thread(&Generator::solveCluster, this, ref(curr_states), _cluster[i]);
 
+    // Wait for all agents to solve the optimization
     for (int i = 0; i < _cluster.size(); ++i)
         _t[i].join();
 
+    // Update the old horizon with the newhorizon for the next optimization
     _oldhorizon = _newhorizon;
+
+    return _next_inputs;
 }
 
-void Generator::solve_cluster(const std::vector<State3D> &curr_states,
+void Generator::solveCluster(const std::vector<State3D> &curr_states,
                               const std::vector<int> &agents) {
 
     VectorXd err_pos, cost, denominator;
     for (int i = agents.front(); i <= agents.back(); i++) {
         // Pick initial condition for the reference
-        _x0_ref[i] = get_init_ref(curr_states[i], _x0_ref[i]);
+        _x0_ref[i] = getInitialReference(curr_states[i], _x0_ref[i]);
 
         // Build collision constraint
-        Constraint collision = _avoider->get_coll_constr(curr_states[i], i);
+//        high_resolution_clock::time_point t1 = high_resolution_clock::now();
+        Constraint collision = _avoider->getCollisionConstraint(curr_states[i], i);
+//        high_resolution_clock::time_point t2 = high_resolution_clock::now();
+//        auto duration = duration_cast<microseconds>( t2 - t1 ).count();
+//        cout << "Time building constraint = "
+//             << duration/1000.0 << "ms" << endl << endl;
 
         // We need to increase the size of other matrices if collision constraints are included
-        QuadraticProblem problem = build_qp(collision, curr_states[i], i);
+//        t1 = high_resolution_clock::now();
+        QuadraticProblem problem = buildQP(collision, curr_states[i], i);
+//        t2 = high_resolution_clock::now();
+//        duration = duration_cast<microseconds>( t2 - t1 ).count();
+//        cout << "Time assembling QP = "
+//             << duration/1000.0 << "ms" << endl << endl;
 
         // Create a new solver pointer of base class
         unique_ptr<BaseSolver> solver = make_unique<OOQP>();
 
         // Solve QP and get solution vector x
+//        t1 = high_resolution_clock::now();
         bool solvedOK = solver->solveQP(problem);
+//        t2 = high_resolution_clock::now();
+//        duration = duration_cast<microseconds>( t2 - t1 ).count();
+//        cout << "Time solving QP = "
+//             << duration/1000.0 << "ms" << endl << endl;
 
         if (solvedOK){
             cout << "Solution OK for agent " << i << endl;
@@ -245,13 +264,28 @@ void Generator::solve_cluster(const std::vector<State3D> &curr_states,
             VectorXd u = solution.head(_num_ctrl_pts);
 
             // Update horizon for the agent
+//            t1 = high_resolution_clock::now();
             _newhorizon[i] = updateHorizon(u, curr_states[i]);
+//            t2 = high_resolution_clock::now();
+//            duration = duration_cast<microseconds>( t2 - t1 ).count();
+//            cout << "Time updating horizon = "
+//                 << duration/1000.0 << "ms" << endl << endl;
 
             // Update the initial condition for the next optimization
+//            t1 = high_resolution_clock::now();
             _x0_ref[i] = updateInitialReference(u);
+//            t2 = high_resolution_clock::now();
+//            duration = duration_cast<microseconds>( t2 - t1 ).count();
+//            cout << "Time updating initial point of reference = "
+//                 << duration/1000.0 << "ms" << endl << endl;
 
             // Update the next input sequence for agent i
+//            t1 = high_resolution_clock::now();
             _next_inputs[i] = vec2mat(_Rho_pos_ts * u, _dim);
+//            t2 = high_resolution_clock::now();
+//            duration = duration_cast<microseconds>( t2 - t1 ).count();
+//            cout << "Time updating next input sequence = "
+//                 << duration/1000.0 << "ms" << endl << endl;
         }
         else {
             // QP failed - repeat previous solution
@@ -261,7 +295,7 @@ void Generator::solve_cluster(const std::vector<State3D> &curr_states,
     }
 }
 
-QuadraticProblem Generator::build_qp(const Constraint& collision, const State3D& state,
+QuadraticProblem Generator::buildQP(const Constraint& collision, const State3D& state,
                                      int agent_id) {
     // Determine if a collision happened, based on the size of the constraint
     int num_neigh = collision.b.size() / 2;
@@ -316,7 +350,7 @@ QuadraticProblem Generator::build_qp(const Constraint& collision, const State3D&
     return problem;
 }
 
-MatrixXd Generator::get_init_ref(const State3D &state, const MatrixXd& ref) {
+MatrixXd Generator::getInitialReference(const State3D &state, const MatrixXd& ref) {
     VectorXd err_pos, cost, denominator;
     err_pos = state.pos - ref.col(0);
     denominator = -(state.vel.array() + 0.01 * state.vel.array().sign());

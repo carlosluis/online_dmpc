@@ -31,7 +31,7 @@ OndemandAvoider::OndemandAvoider (const std::vector<Eigen::MatrixXd>& horizon,
     _N = _horizon.size();
 }
 
-vector<bool> OndemandAvoider::check_collisions(int agent_id, int k) {
+vector<bool> OndemandAvoider::checkCollisions(int agent_id, int k) {
     vector<bool> violation(_N);
     vector<bool> neighbours(_N);
     VectorXd pi = _horizon[agent_id].col(k);
@@ -62,9 +62,9 @@ vector<bool> OndemandAvoider::check_collisions(int agent_id, int k) {
 
 }
 
-CollisionConstraint OndemandAvoider::build_coll_constr(int agent_id, int k,
-                                                       const std::vector<bool> &neighbours,
-                                                       const State3D &state) {
+CollisionConstraint OndemandAvoider::buildCollisionConstraint(int agent_id, int k,
+                                                              const std::vector<bool> &neighbours,
+                                                              const State3D &state) {
     int num_neighbours = std::count(neighbours.begin(), neighbours.end(), true);
     int num_variables = _Phi_pos.cols();
     MatrixXd Ain = MatrixXd::Zero(num_neighbours, num_variables);
@@ -110,17 +110,17 @@ CollisionConstraint OndemandAvoider::build_coll_constr(int agent_id, int k,
     return collision;
 }
 
-Constraint OndemandAvoider::get_coll_constr(const State3D &state, int agent_id) {
+Constraint OndemandAvoider::getCollisionConstraint(const State3D &state, int agent_id) {
     // iterate through each time step
     vector<bool> neighbours;
     CollisionConstraint collision;
     Constraint soft_constraint;
     for (int k = 0; k < _k_hor; k++) {
-        neighbours = check_collisions(agent_id, k);
+        neighbours = checkCollisions(agent_id, k);
         bool violation = neighbours.size() > 0;
 
         if (violation) {
-            collision = build_coll_constr(agent_id, k, neighbours, state);
+            collision = buildCollisionConstraint(agent_id, k, neighbours, state);
 
             int num_neighbours = collision.constraint.b.size();
             int num_variables = _Phi_pos.cols();

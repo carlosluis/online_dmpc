@@ -52,7 +52,7 @@ StatePropagator DoubleIntegrator::get_A0(int K) {
 }
 
 
-DoubleIntegrator3D::DoubleIntegrator3D(const float& ts, const DoubleIntegrator3D::Params& p) {
+DoubleIntegrator3D::DoubleIntegrator3D(float ts, const DoubleIntegrator3D::Params& p) {
 
     _dim = 3;
     float omega_xy = 1 / p.tau_xy;

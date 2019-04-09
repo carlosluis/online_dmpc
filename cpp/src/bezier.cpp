@@ -80,7 +80,7 @@ MatrixXd BezierCurve::get_mat_poly_sampling(Eigen::VectorXd t_samples, int deg) 
     int segment_id;
     int prev_segment_id;
     int samples = 0;
-    bool force_update = false;
+    bool force_update = false, never_updated = false;
     std::vector<double> tmp;
     std::vector<MatrixXd> Tau(_num_segments);
 
@@ -114,6 +114,10 @@ MatrixXd BezierCurve::get_mat_poly_sampling(Eigen::VectorXd t_samples, int deg) 
         prev_segment_id = segment_id;
         samples++;
     }
+
+    // Corner case when t_samples only has elements within the first segment of the Bezier curve
+    if (t_samples.maxCoeff() < _t_segment)
+        Tau[segment_id] = MapMatrixXd(tmp.data(), samples, deg + 1);
 
     return build_mat_poly_sampling(Tau, t_samples.size(), deg);
 }

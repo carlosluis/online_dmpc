@@ -30,7 +30,7 @@ class BaseAvoider {
 public:
     BaseAvoider(){};
     virtual ~BaseAvoider(){};
-
+    virtual std::vector<Ellipse> getEllipses() = 0;
     virtual Constraint getCollisionConstraint(const State3D& state, int agent_id) = 0;
 };
 
@@ -40,6 +40,7 @@ public:
                      const Eigen::MatrixXd& A0_pos, const std::vector<EllipseParams>& p);
     ~OndemandAvoider(){};
 
+    std::vector<Ellipse> getEllipses(){return _ellipse;};
     Constraint getCollisionConstraint(const State3D& state, int agent_id);
 
 

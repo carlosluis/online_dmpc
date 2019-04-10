@@ -6,6 +6,8 @@
 #define ONLINE_PLANNING_SIMULATOR_H
 
 #include "generator.h"
+#include <random>
+#include <fstream>
 
 class Simulator {
 public:
@@ -18,18 +20,34 @@ public:
     explicit Simulator(const Simulator::Params& p);
     ~Simulator(){};
 
+
     void run(int duration);
+    void saveDataToFile(char const* pathAndName);
 
 private:
 
     // Members
     Generator _generator;
     DoubleIntegrator3D _sim_model;
+    std::vector<Ellipse> _ellipses;
+    std::vector<Eigen::MatrixXd> _inputs;
+    std::vector<State3D> _current_states;
+    std::vector<Eigen::MatrixXd> _trajectories;
     float _pos_std;
     float _vel_std;
+    Eigen::MatrixXd _po;
+    Eigen::MatrixXd _pf;
+    Eigen::VectorXd _pmin;
+    Eigen::VectorXd _pmax;
+    int _Ncmd;
+    int _N;
+    float _h;
+    float _Ts;
 
     // Methods
     State3D addRandomNoise(const State3D& states);
+    bool collisionCheck(const std::vector<Eigen::MatrixXd>& trajectories);
+    bool goalCheck(const std::vector<State3D>& states);
     Eigen::MatrixXd generateRandomPoints(int N, const Eigen::Vector3d& pmin,
                                          const Eigen::Vector3d& pmax, float rmin);
 };

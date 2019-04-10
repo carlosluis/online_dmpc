@@ -43,8 +43,8 @@ public:
     ~Generator(){};
 
     // Public methods
+    std::vector<Ellipse> getEllipses(){return _avoider->getEllipses();};
     std::vector<Eigen::MatrixXd> getNextInputs(const std::vector<State3D>& current_states);
-
 
 private:
     float _h;

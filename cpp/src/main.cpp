@@ -15,22 +15,11 @@ int main() {
     Simulator sim(sim_params);
 
     int T = 20; // simulation duration
-//    sim.run(T);
+    sim.run(T);
 
-//    State3D agent1 = {.pos = po1, .vel = 0.001*VectorXd::Ones(dim)};
-//    State3D agent2 = {.pos = po2, .vel = 0.001*VectorXd::Ones(dim)};
-//    State3D agent3 = {.pos = po3, .vel = 0.001*VectorXd::Ones(dim)};
-//    State3D agent4 = {.pos = po4, .vel = 0.001*VectorXd::Ones(dim)};
-//    std::vector<State3D> curr_states{agent1, agent2, agent3, agent4};
-//
-//    high_resolution_clock::time_point t1 = high_resolution_clock::now();
-//
-//    gen.getNextInputs(curr_states);
-//
-//    high_resolution_clock::time_point t2 = high_resolution_clock::now();
-//    auto duration = duration_cast<microseconds>( t2 - t1 ).count();
-//    cout << "Next inputs computed in = "
-//         << duration/1000.0 << "ms" << endl << endl;
+    // Save data to file
+    char const *file = "/home/carlos/repos/bezier_dmpc/cpp/results/trajectories.txt";
+    sim.saveDataToFile(file);
 
 	return 0;
 }

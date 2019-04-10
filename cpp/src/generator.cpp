@@ -255,8 +255,6 @@ void Generator::solveCluster(const std::vector<State3D> &current_states,
 //             << duration/1000.0 << "ms" << endl << endl;
 
         if (solvedOK){
-            cout << "Solution OK for agent " << i << endl;
-
             // Extract solution
             VectorXd solution = solver->getSolution();
 
@@ -289,7 +287,7 @@ void Generator::solveCluster(const std::vector<State3D> &current_states,
         }
         else {
             // QP failed - repeat previous solution
-
+            cout << "QP failed" << endl;
         }
 
     }

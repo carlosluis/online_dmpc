@@ -35,7 +35,7 @@ public:
     // Define parameters to create a 3D double integrator model
     // We assume identical dynamics for X and Y, based on quadcopter experiments
     struct Params {
-        const float& zeta_xy,  tau_xy, zeta_z, tau_z;
+        float zeta_xy,  tau_xy, zeta_z, tau_z;
     };
     DoubleIntegrator3D (float time_step, const DoubleIntegrator3D::Params& p);
     ~DoubleIntegrator3D(){};
@@ -46,7 +46,7 @@ class DoubleIntegrator2D : public DoubleIntegrator {
 public:
     // To be used for ground robots or quadcopters flying in the plane
     struct Params {
-        const float& zeta_x,  tau_x, zeta_y, tau_y;
+        float zeta_x,  tau_x, zeta_y, tau_y;
     };
 
     DoubleIntegrator2D (float time_step, const DoubleIntegrator2D::Params& p);

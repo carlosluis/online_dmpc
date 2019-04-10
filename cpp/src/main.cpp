@@ -111,6 +111,8 @@ Simulator::Params getSimulationParams() {
     // Testing the Generator class
     Generator::Params p = {bezier_params, model_params, ellipse_vec, mpc_params, po, pf};
 
+//    Generator gen(p);
+
     // Noise levels from VICON system
     float std_position = 0.00228682;
     float std_vel = 0.0109302;

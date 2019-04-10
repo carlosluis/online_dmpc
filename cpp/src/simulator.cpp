@@ -9,10 +9,9 @@ using namespace std;
 
 Simulator::Simulator(const Simulator::Params& p) :
     _generator(p.generator_params),
-    _pos_std(p.position_noise_std),
-    _vel_std(p.velocity_noise_std),
-    _sim_model(p.generator_params.mpc_params.Ts, p.generator_params.model_params){
-
+    _sim_model(p.generator_params.mpc_params.Ts, p.generator_params.model_params)
+{
+    cout << "I successfully build a new Simulator" << endl;
 }
 
 MatrixXd Simulator::generateRandomPoints(int N, const Vector3d &pmin,

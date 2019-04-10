@@ -23,20 +23,20 @@ struct TuningParams {
 };
 
 struct MpcParams {
-    const float& h, Ts;
-    const int& k_hor;
-    const TuningParams& tuning;
-    const PhysLimits& limits;
+    float h, Ts;
+    int k_hor;
+    TuningParams tuning;
+    PhysLimits limits;
 };
 
 class Generator {
 public:
     struct Params {
-        const BezierCurve::Params& bezier_params;
-        const DoubleIntegrator3D::Params& model_params;
-        const std::vector<EllipseParams>& ellipse;
-        const MpcParams& mpc_params;
-        const Eigen::MatrixXd& po, pf;
+        BezierCurve::Params bezier_params;
+        DoubleIntegrator3D::Params model_params;
+        std::vector<EllipseParams> ellipse;
+        MpcParams mpc_params;
+        Eigen::MatrixXd po, pf;
     };
 
     Generator(const Generator::Params& p);

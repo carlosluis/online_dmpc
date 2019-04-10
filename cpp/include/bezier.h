@@ -24,8 +24,8 @@ struct InequalityConstraint {
 class BezierCurve {
 public:
     struct Params{
-        const int& deg, num_segments, dim, deg_poly;
-        const float& t_segment;
+        int deg, num_segments, dim, deg_poly;
+        float t_segment;
     };
 
 	BezierCurve(const BezierCurve::Params& p);

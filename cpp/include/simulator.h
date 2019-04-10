@@ -10,9 +10,9 @@
 class Simulator {
 public:
     struct Params {
-        const Generator::Params& generator_params;
-        const float position_noise_std;
-        const float velocity_noise_std;
+        Generator::Params generator_params;
+        float position_noise_std;
+        float velocity_noise_std;
     };
 
     explicit Simulator(const Simulator::Params& p);

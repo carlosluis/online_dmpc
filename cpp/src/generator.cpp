@@ -12,7 +12,7 @@ Generator::Generator(const Generator::Params& p) :
     _bezier(p.bezier_params),
     _model_pred(p.mpc_params.h, p.model_params),
     _model_exec(p.mpc_params.Ts, p.model_params),
-    _max_clusters(8),
+    _max_clusters(1),
     _max_cost(0.08),
     _min_cost(-0.01)
 {
@@ -132,9 +132,9 @@ void Generator::setErrorPenaltyMatrices(const TuningParams &p, const Eigen::Matr
 
 }
 
-InequalityConstraint Generator::buildInequalityConstraint(const PhysLimits &limits){
+InequalityConstraint Generator::buildInequalityConstraint(const PhysicalLimits &limits){
     // Get position constraint
-    VectorXd pos_samples = VectorXd::LinSpaced((_k_hor)/2, _h, (_k_hor - 1) * _h );
+    VectorXd pos_samples = VectorXd::LinSpaced((_k_hor)/3, _h, floor(_k_hor / 3) * _h * _l );
 //    cout << pos_samples << endl;
     InequalityConstraint lim_pos = _bezier.limitDerivative(0, pos_samples, limits.pmin, limits.pmax);
 

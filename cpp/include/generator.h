@@ -11,7 +11,7 @@
 #include "solver.h"
 #include <thread>
 
-struct PhysLimits {
+struct PhysicalLimits {
     Eigen::VectorXd pmax, pmin, amax, amin;
 };
 
@@ -26,7 +26,7 @@ struct MpcParams {
     float h, Ts;
     int k_hor;
     TuningParams tuning;
-    PhysLimits limits;
+    PhysicalLimits limits;
 };
 
 class Generator {
@@ -114,7 +114,7 @@ private:
 
     // Methods
     void initGenerator();
-    InequalityConstraint buildInequalityConstraint(const PhysLimits& limits);
+    InequalityConstraint buildInequalityConstraint(const PhysicalLimits& limits);
     void setErrorPenaltyMatrices(const TuningParams& p, const Eigen::MatrixXd& pf);
     void initClusters();
 

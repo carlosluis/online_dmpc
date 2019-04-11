@@ -8,6 +8,7 @@ using namespace Eigen;
 using namespace std;
 
 bool Quadprog::solveQP(const QuadraticProblem& problem) {
+    // DOESN'T WORK PROPERLY!
     int num_inequalities = problem.bin_full.size();
     int num_equalities = problem.beq.size();
     int num_vars = problem.f.size();
@@ -15,7 +16,7 @@ bool Quadprog::solveQP(const QuadraticProblem& problem) {
     MatrixXd H_sym = 0.5 * (H + H.transpose());
 
     QuadProgDense qp(num_vars, num_equalities, num_inequalities);
-    qp.solve(H_sym, problem.f, problem.Aeq, problem.beq, problem.Ain_full, problem.bin_full, true);
+    qp.solve(H_sym, problem.f, problem.Aeq, problem.beq, problem.Ain_full, problem.bin_full, false);
     VectorXd hola = qp.result();
     cout << "Result: " << qp.fail() << endl;
     std::cout << hola << std::endl;

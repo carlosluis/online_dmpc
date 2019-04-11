@@ -7,33 +7,107 @@
 using namespace Eigen;
 using namespace std;
 using namespace std::chrono;
+using json = nlohmann::json;
 
-Simulator::Simulator(const Simulator::Params& p) :
-    _generator(p.generator_params),
-    _sim_model(p.generator_params.mpc_params.Ts, p.generator_params.model_params),
-    _pos_std(p.position_noise_std),
-    _vel_std(p.velocity_noise_std)
-{
-    // Initialize the current states with the initial locations
-    _h = p.generator_params.mpc_params.h;
-    _Ts = p.generator_params.mpc_params.Ts;
-    _po = p.generator_params.po;
-    _pf = p.generator_params.pf;
-    _pmin = p.generator_params.mpc_params.limits.pmin;
-    _pmax = p.generator_params.mpc_params.limits.pmax;
-    _N = _po.cols();
-    _Ncmd = _pf.cols();
+Simulator::Simulator(std::ifstream& config_file) {
+    Generator::Params p = parseJSON(config_file);
+    _generator = std::make_unique<Generator>(p);
+    _sim_model = std::make_unique<DoubleIntegrator3D>(p.mpc_params.Ts, p.model_params);
+
+    _h = p.mpc_params.h;
+    _Ts = p.mpc_params.Ts;
+    _po = p.po;
+    _pf = p.pf;
+    _pmin = p.mpc_params.limits.pmin;
+    _pmax = p.mpc_params.limits.pmax;
     _current_states.reserve(_Ncmd);
     _trajectories.reserve(_Ncmd);
 
-    _ellipses = _generator.getEllipses();
+    _ellipses = _generator->getEllipses();
 
     for (int i = 0; i < _Ncmd; i++) {
         State3D agent_i = {_po.col(i), VectorXd::Zero(_po.rows())};
         _current_states.push_back(addRandomNoise(agent_i));
     }
+}
 
-    cout << "I successfully build a new Simulator" << endl;
+Generator::Params Simulator::parseJSON(std::ifstream& config_file) {
+    json j;
+    config_file >> j;
+
+    // Parse the data into variables and create the generator params object
+    _N = j["N"];
+    _Ncmd = j["Ncmd"];
+
+    // Bezier curve parameters
+    _bezier_params = {j["d"], j["num_segments"], j["dim"], j["deg_poly"], j["t_segment"]};
+
+    // Dynamic model used in MPC
+    _model_params = {j["zeta_xy"], j["tau_xy"], j["zeta_z"], j["tau_z"]};
+
+    // Tuning parameters for MPC
+    VectorXd energy_weights = VectorXd::Zero(static_cast<int>(j["d"]) + 1);
+    energy_weights(2) = j["acc_cost"];
+
+    TuningParams tune = {j["s_free"], j["s_obs"], j["s_repel"], j["spd_f"], j["spd_o"],
+                         j["spd_r"], j["lin_coll"], j["quad_coll"], energy_weights};
+
+    // Physical limits for inequality constraint
+    vector<double> pmin_vec = j["pmin"];
+    vector<double> pmax_vec = j["pmax"];
+    vector<double> amin_vec = j["amin"];
+    vector<double> amax_vec = j["amax"];
+
+    Vector3d pmin(pmin_vec.data());
+    Vector3d pmax(pmax_vec.data());
+    Vector3d amin(amin_vec.data());
+    Vector3d amax(amax_vec.data());
+
+    PhysicalLimits limits = {pmax, pmin, amax, amin};
+
+    _mpc_params = {j["h"], j["ts"], j["k_hor"], tune, limits};
+
+    // Ellipsoidal collision constraint
+    EllipseParams ellipse_params;
+    ellipse_params.order = j["order"];
+    ellipse_params.rmin = j["rmin"];
+    ellipse_params.c = (Eigen::Vector3d() << 1.0, 1.0, j["height_scaling"]).finished();
+    std::vector<EllipseParams> ellipse_vec(_N, ellipse_params);
+
+    _pos_std = j["std_position"];
+    _vel_std = j["std_velocity"];
+
+    // Generate the test
+    std::string test_type =  j["test"];
+    if (!test_type.compare("default")) {
+        // get the values from the json file for a fixed test
+        vector<vector<double>> po_vec = j["po"];
+        _po = MatrixXd::Zero(j["dim"], _N);
+        for (int i = 0; i < _N; i++) {
+            Vector3d poi(po_vec[i].data());
+            _po.col(i) = poi;
+        }
+
+        vector<vector<double>> pf_vec = j["pf"];
+        _pf = MatrixXd::Zero(j["dim"], _Ncmd);
+        for (int i = 0; i < _Ncmd; i++) {
+            Vector3d pfi(pf_vec[i].data());
+            _pf.col(i) = pfi;
+        }
+
+    }
+    else if (!test_type.compare("random")) {
+        // Generate a random test
+        _po = generateRandomPoints(_N, limits.pmin.array() + 0.3,
+                                   limits.pmax.array() - 0.3, ellipse_params.rmin + 0.2);
+
+        _pf = generateRandomPoints(_Ncmd, limits.pmin.array() + 0.3,
+                                   limits.pmax.array() - 0.3, ellipse_params.rmin + 0.2);
+    }
+    else throw std::invalid_argument("Invalid test type '" + test_type + " '");
+
+    Generator::Params p = {_bezier_params, _model_params, ellipse_vec, _mpc_params, _po, _pf};
+    return p;
 }
 
 void Simulator::run(int duration) {
@@ -56,7 +130,7 @@ void Simulator::run(int duration) {
         if (count == max_count) {
             // Get next series of inputs
             t1 = high_resolution_clock::now();
-            _inputs = _generator.getNextInputs(_current_states);
+            _inputs = _generator->getNextInputs(_current_states);
             t2 = high_resolution_clock::now();
             auto mpc_duration = duration_cast<microseconds>( t2 - t1 ).count();
             cout << "Solving frequency = " << 1000000.0 / mpc_duration << " Hz" << endl;
@@ -65,7 +139,7 @@ void Simulator::run(int duration) {
 
         // Apply inputs to all agents to get the next states
         for (int i = 0; i < _Ncmd; i++) {
-            State3D sim_states = _sim_model.applyInput(_current_states[i], _inputs[i].col(count));
+            State3D sim_states = _sim_model->applyInput(_current_states[i], _inputs[i].col(count));
             _current_states[i] = addRandomNoise(sim_states);
             _trajectories[i].col(k) = _current_states[i].pos;
         }
@@ -76,6 +150,7 @@ void Simulator::run(int duration) {
     collisionCheck(_trajectories);
     goalCheck(_current_states);
 }
+
 
 bool Simulator::collisionCheck(const std::vector<Eigen::MatrixXd> &trajectories) {
     float rmin_check = 0.15;
@@ -155,6 +230,32 @@ State3D Simulator::addRandomNoise(const State3D &states) {
     return result;
 }
 
+void Simulator::saveDataToFile(char const *pathAndName) {
+
+    ofstream file(pathAndName, ios::out | ios::trunc);
+    if(file)  // succeeded at opening the file
+    {
+        // instructions
+        cout << "Writing solution to text file..." << endl;
+
+        // write a few simulation parameters used in the reading end
+        file << _N << " " <<  _Ncmd << " " << _pmin.transpose() << " " << _pmax.transpose() << endl;
+        file << _po << endl;
+        file << _pf << endl;
+
+        for(int i=0; i < _Ncmd; ++i)
+            file << _trajectories[i] << endl;
+
+        file.close();  // close the file after finished
+    }
+
+    else
+    {
+        cerr << "Error while trying to open file" << endl;
+    }
+
+}
+
 MatrixXd Simulator::generateRandomPoints(int N, const Vector3d &pmin,
                                          const Vector3d &pmax, float rmin) {
     MatrixXd pts = MatrixXd::Zero(3, N);
@@ -192,30 +293,4 @@ MatrixXd Simulator::generateRandomPoints(int N, const Vector3d &pmin,
         pass = false;
     }
     return pts;
-}
-
-void Simulator::saveDataToFile(char const *pathAndName) {
-
-    ofstream file(pathAndName, ios::out | ios::trunc);
-    if(file)  // succeeded at opening the file
-    {
-        // instructions
-        cout << "Writing solution to text file..." << endl;
-
-        // write a few simulation parameters used in the reading end
-        file << _N << " " <<  _Ncmd << " " << _pmin.transpose() << " " << _pmax.transpose() << endl;
-        file << _po << endl;
-        file << _pf << endl;
-
-        for(int i=0; i < _Ncmd; ++i)
-            file << _trajectories[i] << endl;
-
-        file.close();  // close the file after finished
-    }
-
-    else
-    {
-        cerr << "Error while trying to open file" << endl;
-    }
-
 }

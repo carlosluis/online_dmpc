@@ -50,4 +50,16 @@ private:
     Eigen::VectorXd _solution;
 };
 
+class QpOASES : public BaseSolver {
+public:
+    QpOASES(){};
+    ~QpOASES(){};
+
+    bool solveQP(const QuadraticProblem& problem);
+    Eigen::VectorXd getSolution(){return _solution;};
+
+private:
+    Eigen::VectorXd _solution;
+};
+
 #endif //ONLINE_PLANNING_SOLVER_H

@@ -244,7 +244,7 @@ void Generator::solveCluster(const std::vector<State3D> &current_states,
 //             << duration/1000.0 << "ms" << endl << endl;
 
         // Create a new solver pointer of base class
-        unique_ptr<BaseSolver> solver = make_unique<OOQP>();
+        unique_ptr<BaseSolver> solver = make_unique<QpOASES>();
 
         // Solve QP and get solution vector x
 //        t1 = high_resolution_clock::now();

@@ -1,7 +1,7 @@
 {
-  "N": 4,
-  "Ncmd": 4,
-  "test": "default",
+  "N": 20,
+  "Ncmd": 20,
+  "test": "random",
 
   "po":[
     [-1.0, -1.0, 1.0],

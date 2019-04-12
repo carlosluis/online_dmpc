@@ -8,6 +8,7 @@
 #include "iostream"
 #include "bezier.h"
 #include "model.h"
+#include "qpOASES.hpp"
 #include "eigen-quadprog/src/QuadProg.h"
 #include "ooqp_eigen_interface/OoqpEigenInterface.hpp"
 

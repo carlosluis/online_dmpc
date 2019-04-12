@@ -10,9 +10,13 @@ set( CMAKE_EXPORT_COMPILE_COMMANDS ON )
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 find_package(Eigen3 REQUIRED)
+
+add_subdirectory(submodules/qpOASES)
+
 include_directories(
 	${PROJECT_SOURCE_DIR}/include
 	${EIGEN3_INCLUDE_DIR}
+	submodules/qpOASES/include
 )
 
 message("-- Eigen library directory: ${EIGEN3_INCLUDE_DIR}")
@@ -49,6 +53,7 @@ target_link_libraries(generator
 	solver
 	pthread
 	eigen-quadprog
+	qpOASES
 	ooqpei
 	${OOQP_LIBS}
 	model)

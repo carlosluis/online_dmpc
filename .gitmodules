@@ -1,0 +1,3 @@
+[submodule "cpp/submodules/qpOASES"]
+	path = cpp/submodules/qpOASES
+	url = https://github.com/whoenig/qpOASES/

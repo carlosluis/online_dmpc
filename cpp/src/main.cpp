@@ -6,8 +6,6 @@ using namespace std;
 using namespace Eigen;
 using namespace std::chrono;
 
-
-
 int main() {
 	cout << "Hello world!" << endl;
 

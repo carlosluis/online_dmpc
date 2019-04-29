@@ -2,6 +2,7 @@
   "N": 20,
   "Ncmd": 20,
   "test": "random",
+  "solver": "qpoases",
 
   "po":[
     [-1.0, -1.0, 1.0],

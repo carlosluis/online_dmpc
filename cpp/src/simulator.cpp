@@ -39,6 +39,16 @@ Generator::Params Simulator::parseJSON(std::ifstream& config_file) {
     _N = j["N"];
     _Ncmd = j["Ncmd"];
 
+    std::string solver_name =  j["solver"];
+    Solver qp_solver;
+
+    if (!solver_name.compare("qpoases"))
+        qp_solver = kQpoases;
+    else if (!solver_name.compare("ooqp"))
+        qp_solver = kOoqp;
+    else
+        throw std::invalid_argument("Invalid solver '" + solver_name + " '");
+
     // Bezier curve parameters
     _bezier_params = {j["d"], j["num_segments"], j["dim"], j["deg_poly"], j["t_segment"]};
 
@@ -106,7 +116,8 @@ Generator::Params Simulator::parseJSON(std::ifstream& config_file) {
     }
     else throw std::invalid_argument("Invalid test type '" + test_type + " '");
 
-    Generator::Params p = {_bezier_params, _model_params, ellipse_vec, _mpc_params, _po, _pf};
+    Generator::Params p = {_bezier_params, _model_params, ellipse_vec,
+                           _mpc_params, _po, _pf, qp_solver};
     return p;
 }
 

@@ -11,6 +11,12 @@
 #include "solver.h"
 #include <thread>
 
+typedef enum {
+    kQuadprog,
+    kOoqp,
+    kQpoases
+} Solver;
+
 struct PhysicalLimits {
     Eigen::VectorXd pmax, pmin, amax, amin;
 };
@@ -37,6 +43,7 @@ public:
         std::vector<EllipseParams> ellipse;
         MpcParams mpc_params;
         Eigen::MatrixXd po, pf;
+        Solver solver_name;
     };
 
     Generator(const Generator::Params& p);
@@ -57,6 +64,8 @@ private:
     int _N;
     int _d;
     int _deg_poly;
+
+    Solver _solver_name;
 
     double _lin_coll;
     double _quad_coll;

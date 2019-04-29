@@ -26,6 +26,7 @@ Generator::Generator(const Generator::Params& p) :
     _deg_poly = p.bezier_params.deg_poly;
     _po = p.po;
     _pf = p.pf;
+    _solver_name = p.solver_name;
     _N = _po.cols();
     _Ncmd = _pf.cols();
     _fpf_free.reserve(_Ncmd);
@@ -79,7 +80,6 @@ Generator::Generator(const Generator::Params& p) :
     // Create the avoider object for collision avoidance
     _avoider = std::make_unique<OndemandAvoider>(_oldhorizon, _Phi_pred.pos,
                                                  _A0_pred.pos, p.ellipse);
-
 }
 
 void Generator::setErrorPenaltyMatrices(const TuningParams &p, const Eigen::MatrixXd &pf){
@@ -244,7 +244,11 @@ void Generator::solveCluster(const std::vector<State3D> &current_states,
 //             << duration/1000.0 << "ms" << endl << endl;
 
         // Create a new solver pointer of base class
-        unique_ptr<BaseSolver> solver = make_unique<QpOASES>();
+        unique_ptr<BaseSolver> solver;
+        if (_solver_name == kOoqp)
+            solver = make_unique<OOQP>();
+        else if (_solver_name == kQpoases)
+            solver = make_unique<QpOASES>();
 
         // Solve QP and get solution vector x
 //        t1 = high_resolution_clock::now();

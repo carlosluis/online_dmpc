@@ -82,7 +82,16 @@ Generator::Params Simulator::parseJSON(std::ifstream& config_file) {
     ellipse_params.order = j["order"];
     ellipse_params.rmin = j["rmin"];
     ellipse_params.c = (Eigen::Vector3d() << 1.0, 1.0, j["height_scaling"]).finished();
-    std::vector<EllipseParams> ellipse_vec(_N, ellipse_params);
+    std::vector<EllipseParams> ellipse_vec(_Ncmd, ellipse_params);
+
+    EllipseParams ellipse_params_obs;
+    ellipse_params_obs.order = j["order_obs"];
+    ellipse_params_obs.rmin = j["rmin_obs"];
+    ellipse_params_obs.c = (Eigen::Vector3d() << 1.0, 1.0, j["height_scaling_obs"]).finished();
+    std::vector<EllipseParams> ellipse_vec_obs(_N - _Ncmd, ellipse_params_obs);
+
+    // Combine the two
+    ellipse_vec.insert(ellipse_vec.end(), ellipse_vec_obs.begin(), ellipse_vec_obs.end());
 
     _pos_std = j["std_position"];
     _vel_std = j["std_velocity"];

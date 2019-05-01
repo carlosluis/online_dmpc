@@ -185,14 +185,14 @@ void Generator::initClusters() {
 }
 
 void Generator::initGenerator() {
-    _x0_ref.reserve(_Ncmd);
-    _next_inputs.reserve(_Ncmd);
+    _x0_ref.reserve(_N);
+    _next_inputs.reserve(_N);
     _newhorizon.reserve(_N);
     _oldhorizon.reserve(_N);
     MatrixXd pos_aux = MatrixXd::Zero(_dim, _k_hor);
     MatrixXd init_ref = MatrixXd::Zero(_dim, _d + 1);
 
-    for (int i = 0; i < _Ncmd; i++) {
+    for (int i = 0; i < _N; i++) {
         VectorXd poi = _po.col(i);
         VectorXd voi = 0.001 * VectorXd::Ones(_dim);
         init_ref << poi, voi, MatrixXd::Zero(_dim, _d - 1);

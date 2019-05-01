@@ -1,14 +1,14 @@
 {
-  "N": 20,
-  "Ncmd": 20,
-  "test": "random",
+  "N": 4,
+  "Ncmd": 3,
+  "test": "default",
   "solver": "qpoases",
 
   "po":[
     [-1.0, -1.0, 1.0],
     [1.0, 1.0, 1.0],
     [-1.0, 1.0, 1.0],
-    [1.0, -1.0, 1.0]
+    [0.0, 0.0, 1.0]
   ],
 
   "pf":[
@@ -51,6 +51,10 @@
   "rmin": 0.3,
   "order": 2,
   "height_scaling": 2.0,
+
+  "rmin_obs": 0.5,
+  "order_obs": 2,
+  "height_scaling_obs": 4.0,
 
   "std_position": 0.00228682,
   "std_velocity": 0.0109302

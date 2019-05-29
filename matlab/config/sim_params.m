@@ -44,8 +44,8 @@ l = 3;         % number of Bezier curves to concatenate
 d = 5;         % degree of the bezier curve
 
 % Physical limits of the robot - position and acceleration bounds
-phys_limits.pmin = [-1.5, -1.5, 0.2];
-phys_limits.pmax = [1.5, 1.5, 2.2];
+phys_limits.pmin = [-1.5, -1.5, 0.98];
+phys_limits.pmax = [1.5, 1.5, 1.02];
 phys_limits.amax = 1;
 phys_limits.amin = -1;
 

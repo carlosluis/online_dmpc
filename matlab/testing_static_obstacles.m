@@ -65,23 +65,24 @@ pmax_gen = [1.5,1.5,2.2];
 % [po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin, E1, order);
 
 % Initial positions
-po1 = [-1.0, -1.0,1.0];
-po2 = [1.0,1.0,1.0];
-po3 = [-1.0,1.0,1.0];
-po4 = [1.0,-1.0,1.0];
-po5 = [0.0, 0.0, 1.0];
+po1 = [0.5, 0.8,1.0];
+po2 = [1.0, 0.8, 1.0];
+po3 = [-1.0, -0.8,1.0];
+po4 = [1.0,-0.8,1.0];
+po5 = [0.0, 0.0,1.0];
+% po5 = [1.0, 0.0, 1.0];
 po6 = [-1.0, 0.0, 1.0];
 po7 = [-0.0, 0.0, 1.0];
 po = cat(3,po1,po2,po3,po4,po5,po6,po7);
 
 % Final positions
-pf1 = [1.0, 1.0,1.0];
-pf2 = [-1.0,-1.0,1.0];
-pf3 = [1.0,-1.0,1.0];
-pf4 = [-1.0,1.0,1.0];
+pf1 = [ 1.0, -0.8,1.0];
+pf2 = [-1.0, -0.8,1.0];
+pf3 = [1.0, 0.8, 1.0];
+pf4 = [-1.0, 0.8, 1.0];
 pf5 = [-1.0, 0.0, 1.0];
 pf6 = [1.0, 0.0, 1.0];
-pf  = cat(3,pf1,pf2,pf3,pf4);
+pf  = cat(3,pf1, pf2, pf3, pf4);
 
 %%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 

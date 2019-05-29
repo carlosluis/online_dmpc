@@ -75,9 +75,9 @@ box on;
 xticks([-1  1]);
 yticks([-1  1]);
 zticks([0  2]);
-xlabel('X [m]')
-ylabel('Y [m]');
-zlabel('Z [m]');
+xlabel('x [m]')
+ylabel('y [m]');
+zlabel('z [m]');
 
 set(gcf,'color','w');
 
@@ -103,7 +103,7 @@ for i = N_cmd + 1: N
             % Plot rouge agents sphere for better visualization
             v = ((x-pos_k_i(1,k,i))/c(i,1)).^(order(i)) + ((y-pos_k_i(2,k,i))/c(i,2)).^(order(i)) + ...
                 ((z-pos_k_i(3,k,i))/c(i,3)).^(order(i)) - rmin(i)^order(i);
-            patch(isosurface(x,y,z,v,0), 'Facealpha', 0.6, 'FaceColor',...
+            patch(isosurface(x,y,z,v,0), 'Facealpha', 1.0, 'FaceColor',...
                            [0.3,0.3,0.3], 'EdgeColor', [0.3,0.3,0.3]);
 
 end

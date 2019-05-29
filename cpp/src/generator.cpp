@@ -134,7 +134,7 @@ void Generator::setErrorPenaltyMatrices(const TuningParams &p, const Eigen::Matr
 
 InequalityConstraint Generator::buildInequalityConstraint(const PhysicalLimits &limits){
     // Get position constraint
-    VectorXd pos_samples = VectorXd::LinSpaced((_k_hor)/3, _h, floor(_k_hor / 3) * _h * _l );
+    VectorXd pos_samples = VectorXd::LinSpaced((_k_hor)/3, 1.0, floor(_k_hor / 3) * _h * _l );
 //    cout << pos_samples << endl;
     InequalityConstraint lim_pos = _bezier.limitDerivative(0, pos_samples, limits.pmin, limits.pmax);
 

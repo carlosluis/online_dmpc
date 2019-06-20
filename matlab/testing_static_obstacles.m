@@ -29,20 +29,24 @@ disturbance_k = [1:80];  % timesteps to apply the perturbation
 % Number of vehicles in the problem
 N = 2;
 N_rogues = 1;
+N_obs = 1;
 
 % Specify a specific size for rogue agents
 order_r = 2;
 rmin_r = 1.0;
-c_r = [0.1, 1.0, 3.0];
+c_r = [0.2, 1.0, 5.0];
 E_r = diag(c_r);
 E1_r = E_r^(-1);
 E2_r = E_r^(-order_r);
 
+% Dimension definitions for static obstacles
+
+
 % Number of agents to be controlled by our algorithm
 N_cmd = N - N_rogues;
 
-for i = 1:N
-    if i <= N_cmd
+for i = 1:N+N_obs
+    if i <= N
         order(i) = order_a;
         rmin(i) = rmin_a;
         c(i,:) = c_a;
@@ -65,19 +69,18 @@ pmax_gen = [1.5,1.5,2.2];
 % [po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin, E1, order);
 
 % Initial positions
-po1 = [1.0, 0.0,1.0];
-po2 = [0.0, 0.0, 1.0];
-po3 = [-1.0, -0.8,1.0];
+po1 = [1.0, 0.0, 1.0];
+po2 = [-1.0, 0.0, 1.0];
+po3 = [0.0, 0.0, 1.0];
 po4 = [1.0,-0.8,1.0];
 po5 = [0.0, 0.0,1.0];
-% po5 = [1.0, 0.0, 1.0];
 po6 = [-1.0, 0.0, 1.0];
 po7 = [-0.0, 0.0, 1.0];
 po = cat(3,po1,po2,po3,po4,po5,po6,po7);
 
 % Final positions
 pf1 = [ -1.0, 0.0,1.0];
-pf2 = [-1.0, -0.8,1.0];
+pf2 = [-1.0, 0.0, 1.0];
 pf3 = [1.0, 0.8, 1.0];
 pf4 = [-1.0, 0.8, 1.0];
 pf5 = [-1.0, 0.0, 1.0];
@@ -219,6 +222,13 @@ for i = 1:N
    end
    hor_ref(:,:,i,1) = repmat(poi, 1, k_hor);
    hor_rob(:,:,i,1) = repmat(poi, 1, k_hor+1);
+end
+
+for i = N+1 : N + N_obs
+    poi = po(:,:,i)';
+    pos_k_i(:,1,i) = poi;
+    hor_ref(:,:,i,1) = repmat(poi, 1, k_hor);
+    hor_rob(:,:,i,1) = repmat(poi, 1, k_hor+1);
 end
 
 pred_X0 = X0;
@@ -425,6 +435,13 @@ for k = 2:K
         pos_k_i(:,k,i) = pos_k_i(:,k-1,i);
         vel_k_i(:,k,i) = vel_k_i(:,k-1,i);
         hor_rob_k(:,:,i) = repmat(X0(1:3, i), 1, k_hor + 1);
+    end
+    
+    % Update the states of the static obstacles
+    for i = N+1 : N + N_obs
+        poi = po(:,:,i)';
+        pos_k_i(:,k,i) = poi;
+        hor_rob_k(:,:, i) = repmat(poi, 1, k_hor + 1);
     end
 
     hor_rob(:,:,:,k) = hor_rob_k;

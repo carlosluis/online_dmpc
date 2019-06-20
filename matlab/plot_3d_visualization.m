@@ -28,7 +28,7 @@ while get(gcf,'currentchar')==' '
             plot3(pf(1,1,i), pf(1,2,i), pf(1,3,i), 'x',...
                   'LineWidth', 2, 'Color', colors(i,:));   
         end
-        for i = N_cmd + 1: N
+        for i = N_cmd + 1: N + N_obs
             % Plot rouge agents sphere for better visualization
             v = ((x-pos_k_i(1,k,i))/c(i,1)).^(order(i)) + ((y-pos_k_i(2,k,i))/c(i,2)).^(order(i)) + ...
                 ((z-pos_k_i(3,k,i))/c(i,3)).^(order(i)) - rmin(i)^order(i);

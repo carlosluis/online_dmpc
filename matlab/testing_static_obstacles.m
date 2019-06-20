@@ -27,19 +27,36 @@ disturbance_k = [1:80];  % timesteps to apply the perturbation
 % We will assume that all the rogue agents are labelled after the commanded agents
 
 % Number of vehicles in the problem
-N = 2;
-N_rogues = 1;
-N_obs = 1;
+N = 6;
+N_rogues = 0;
+N_obs = 4;
 
-% Specify a specific size for rogue agents
+% OBSTACLE DEFINITIONS
+% first obstacle
+rmin_r(1) = 1.0;
+c_r(1, :) =  [0.2, 0.7, 5.0];
+
+% second obstacle
+rmin_r(2) = 1.0;
+c_r(2, :) =  [0.2, 0.7, 5.0];
+
+% third obstacle
+rmin_r(3) = 1.0;
+c_r(3, :) =  [0.2, 2.0, 0.9];
+
+% fourth obstacle
+rmin_r(4) = 1.0;
+c_r(4, :) =  [0.2, 2.0, 0.4];
+
+% model each obstacle with a seonf order ellipsoid
 order_r = 2;
-rmin_r = 1.0;
-c_r = [0.2, 1.0, 5.0];
-E_r = diag(c_r);
-E1_r = E_r^(-1);
-E2_r = E_r^(-order_r);
 
-% Dimension definitions for static obstacles
+% Specify a specific size for obstacles
+for i = 1:N_obs
+    E_r(:,:,i) = diag(c_r(i,:));
+    E1_r(:,:,i) = E_r(:,:,i)^(-1);
+    E2_r(:,:,i) = E_r(:,:,i)^(-order_r);
+end
 
 
 % Number of agents to be controlled by our algorithm
@@ -54,11 +71,10 @@ for i = 1:N+N_obs
         E2(:,:,i) = E2_a;
     else
         order(i) = order_r;
-        rmin(i) = rmin_r;
-        c(i,:) = c_r;
-        E1(:,:,i) = E1_r;
-        E2(:,:,i) = E2_r;
-        
+        rmin(i) = rmin_r(i - N);
+        c(i,:) = c_r(i-N, :);
+        E1(:,:,i) = E1_r(:,:,i - N);
+        E2(:,:,i) = E2_r(:, :, i - N);
     end
 end
 
@@ -68,24 +84,30 @@ pmax_gen = [1.5,1.5,2.2];
 % Generate a random set of initial and final positions
 % [po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin, E1, order);
 
-% Initial positions
+% Initial positions of agents
 po1 = [1.0, 0.0, 1.0];
 po2 = [-1.0, 0.0, 1.0];
-po3 = [0.0, 0.0, 1.0];
-po4 = [1.0,-0.8,1.0];
-po5 = [0.0, 0.0,1.0];
-po6 = [-1.0, 0.0, 1.0];
-po7 = [-0.0, 0.0, 1.0];
-po = cat(3,po1,po2,po3,po4,po5,po6,po7);
+po3 = [1.0, 0.5, 1.0];
+po4 = [-1.0,-0.5,1.0];
+po5 = [1.0, -0.5, 1.0];
+po6 = [-1.0, 0.5, 1.0];
+
+% Obstacle positions
+pobs1 = [0.0, 1.0, 1.0];
+pobs2 = [0.0, -1.0, 1.0];
+pobs3 = [0.0, 0.0, 0.2];
+pobs4 = [0.0, 0.0, 2.0];
+
+po = cat(3,po1,po2,po3,po4,po5,po6,pobs1, pobs2, pobs3, pobs4);
 
 % Final positions
-pf1 = [ -1.0, 0.0,1.0];
-pf2 = [-1.0, 0.0, 1.0];
-pf3 = [1.0, 0.8, 1.0];
-pf4 = [-1.0, 0.8, 1.0];
-pf5 = [-1.0, 0.0, 1.0];
-pf6 = [1.0, 0.0, 1.0];
-pf  = cat(3,pf1);
+pf1 = [-1.0, 0.0, 1.0];
+pf2 = [1.0, 0.0, 1.0];
+pf3 = [-1.0, -0.5, 1.0];
+pf4 = [1.0, 0.5, 1.0];
+pf5 = [-1.0, 0.5, 1.0];
+pf6 = [1.0, -0.5, 1.0];
+pf  = cat(3,pf1, pf2,pf3,pf4,pf5,pf6);
 
 %%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 

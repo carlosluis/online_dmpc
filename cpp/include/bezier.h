@@ -40,6 +40,9 @@ public:
     InequalityConstraint limitDerivative(int degree, const Eigen::VectorXd& t_samples,
                                          const Eigen::VectorXd& min, const Eigen::VectorXd& max);
 
+    InequalityConstraint limitControlPoints(int degree, const Eigen::VectorXd& min,
+                                            const Eigen::VectorXd& max);
+
     Eigen::MatrixXd getMatrixEqualityConstraint (int deg_poly);
 
 private:
@@ -57,6 +60,8 @@ private:
     Eigen::MatrixXd augmentMatrixForm(const Eigen::MatrixXd& mat);
 
     Eigen::MatrixXd getMatrixInputSampling(const Eigen::VectorXd& t_samples, int r);
+
+    Eigen::MatrixXd getMatrixDerivativeControlPoints(int r);
 
     std::vector<Eigen::MatrixXd> derivateControlPoints();
 

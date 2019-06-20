@@ -169,6 +169,23 @@ MatrixXd BezierCurve::getMatrixInputSampling(const VectorXd& t_samples, int r) {
     return Tau_r * Beta_r * Sigma_r;
 }
 
+MatrixXd BezierCurve::getMatrixDerivativeControlPoints(int r) {
+    // Create matrix that samples the r-th derivative of the bezier curve
+
+    MatrixXd Sigma_r;
+    MatrixXd Beta_r;
+    MatrixXd Tau_r;
+
+    if (r > 0)
+        Sigma_r = augmentMatrixForm(_T_ctrl_pts.at(r - 1));
+    else
+        Sigma_r = MatrixXd::Identity(_num_ctrl_pts, _num_ctrl_pts);
+
+    Beta_r = bernsteinToPowerBasis(_deg - r);
+
+    return Sigma_r;
+}
+
 MatrixXd BezierCurve::getMatrixSumSqrdDerivatives(const VectorXd& weights){
     double mult;
     MatrixXd Q_sum = MatrixXd::Zero(_deg + 1, _deg + 1);
@@ -245,6 +262,25 @@ InequalityConstraint BezierCurve::limitDerivative(int n, const VectorXd& t_sampl
     // Build 'b' vector for the constraint
     VectorXd b_max = max.replicate(t_samples.size(), 1);
     VectorXd b_min = min.replicate(t_samples.size(), 1);
+    VectorXd b_in(2 * b_max.size());
+    b_in << b_max, -b_min;
+
+    // Assemble constraint struct
+    InequalityConstraint constr = {A_in_t, b_in, A_in, b_min, b_max};
+    return constr;
+}
+
+InequalityConstraint BezierCurve::limitControlPoints(int n, const Eigen::VectorXd &min,
+                                                     const Eigen::VectorXd &max) {
+
+    // Build 'A' matrix for the constraint
+    MatrixXd A_in = getMatrixDerivativeControlPoints(n);
+    MatrixXd A_in_t = MatrixXd::Zero(2 * A_in.rows(), A_in.cols());
+    A_in_t << A_in, -A_in;
+
+    // Build 'b' vector for the constraint
+    VectorXd b_max = max.replicate(A_in.rows() / _dim, 1);
+    VectorXd b_min = min.replicate(A_in.rows() / _dim, 1);
     VectorXd b_in(2 * b_max.size());
     b_in << b_max, -b_min;
 

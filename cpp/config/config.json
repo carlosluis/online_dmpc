@@ -1,6 +1,6 @@
 {
   "N": 4,
-  "Ncmd": 3,
+  "Ncmd": 4,
   "test": "default",
   "solver": "qpoases",
 
@@ -22,7 +22,7 @@
   "num_segments": 3,
   "deg_poly": 3,
   "dim": 3,
-  "t_segment": 1.0,
+  "t_segment": 0.5,
 
   "zeta_xy": 0.6502,
   "tau_xy": 0.3815,
@@ -30,7 +30,7 @@
   "tau_z": 0.3,
 
   "k_hor": 16,
-  "h": 0.2,
+  "h": 0.1,
   "ts": 0.01,
 
   "s_free": 100,

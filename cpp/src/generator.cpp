@@ -138,6 +138,8 @@ InequalityConstraint Generator::buildInequalityConstraint(const PhysicalLimits &
 //    cout << pos_samples << endl;
     InequalityConstraint lim_pos = _bezier.limitDerivative(0, pos_samples, limits.pmin, limits.pmax);
 
+    InequalityConstraint lim_pos2 = _bezier.limitControlPoints(0, limits.pmin, limits.pmax);
+
     // Get acceleration constraint
     VectorXd acc_samples = VectorXd::LinSpaced((_k_hor)/2, _h, (_k_hor - 1) * _h);
     InequalityConstraint lim_acc = _bezier.limitDerivative(2, acc_samples, limits.amin, limits.amax);

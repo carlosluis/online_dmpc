@@ -17,7 +17,7 @@ view_cost = 0;      % value of the replanning cost function
 global debug_constr;
 debug_constr = 0;
 
-use_ondemand = false;
+use_ondemand = true;
 
 % Disturbance applied to the model within a time frame
 disturbance = 0;       % activate the disturbance
@@ -27,13 +27,13 @@ disturbance_k = [1:80];  % timesteps to apply the perturbation
 % We will assume that all the rogue agents are labelled after the commanded agents
 
 % Number of vehicles in the problem
-N = 5;
+N = 2;
 N_rogues = 1;
 
 % Specify a specific size for rogue agents
-order_r = 4;
+order_r = 2;
 rmin_r = 1.0;
-c_r = [0.2, 1.0, 2.0];
+c_r = [0.1, 1.0, 3.0];
 E_r = diag(c_r);
 E1_r = E_r^(-1);
 E2_r = E_r^(-order_r);
@@ -65,8 +65,8 @@ pmax_gen = [1.5,1.5,2.2];
 % [po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin, E1, order);
 
 % Initial positions
-po1 = [0.5, 0.8,1.0];
-po2 = [1.0, 0.8, 1.0];
+po1 = [1.0, 0.0,1.0];
+po2 = [0.0, 0.0, 1.0];
 po3 = [-1.0, -0.8,1.0];
 po4 = [1.0,-0.8,1.0];
 po5 = [0.0, 0.0,1.0];
@@ -76,13 +76,13 @@ po7 = [-0.0, 0.0, 1.0];
 po = cat(3,po1,po2,po3,po4,po5,po6,po7);
 
 % Final positions
-pf1 = [ 1.0, -0.8,1.0];
+pf1 = [ -1.0, 0.0,1.0];
 pf2 = [-1.0, -0.8,1.0];
 pf3 = [1.0, 0.8, 1.0];
 pf4 = [-1.0, 0.8, 1.0];
 pf5 = [-1.0, 0.0, 1.0];
 pf6 = [1.0, 0.0, 1.0];
-pf  = cat(3,pf1, pf2, pf3, pf4);
+pf  = cat(3,pf1);
 
 %%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 

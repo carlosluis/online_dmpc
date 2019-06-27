@@ -72,9 +72,15 @@ for k = 2:K
         % Include on-demand collision avoidance
         
         if use_ondemand
+            if (use_stateCA)
             [A_coll, b_coll, pf_tmp, t_build(k,i)] = ondemand_softconstraints(hor_rob(:,2:end,:,k-1), Phi,...
-                                                            X0(:,i), A0.pos, i, rmin,...
-                                                            order, E1, E2);
+                                                                              X0(:,i), A0.pos, i, rmin,...
+                                                                              order, E1, E2);
+            else                                                           
+            [A_coll, b_coll, pf_tmp, t_build(k,i)] = ondemand_softconstraints_ref(hor_ref(:,:,:,k-1), Phi_ref,...
+                                                                                 X0(:,i), i, rmin,...
+                                                                                 order, E1, E2);
+            end
 
             if ~isempty(b_coll) % collisions in the horizon
                 % Include collision constraints and slack variables

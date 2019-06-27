@@ -41,6 +41,8 @@ H_free = Phi'*S_free*Phi;
 H_obs = Phi'*S_obs*Phi;
 H_repel = Phi'*S_repel*Phi;
 
+Phi_ref = Gamma*Beta;
+
 % The complete Hessian is simply the sum of the two
 H_f = H_free + H_snap;
 H_o = H_obs + H_snap;

@@ -27,26 +27,26 @@ disturbance_k = [1:80];  % timesteps to apply the perturbation
 % We will assume that all the rogue agents are labelled after the commanded agents
 
 % Number of vehicles in the problem
-N = 6;
+N = 4;
 N_rogues = 0;
 N_obs = 4;
 
 % OBSTACLE DEFINITIONS
 % first obstacle
 rmin_r(1) = 1.0;
-c_r(1, :) =  [0.2, 0.7, 5.0];
+c_r(1, :) =  [0.4, 1.3, 5.0];
 
 % second obstacle
 rmin_r(2) = 1.0;
-c_r(2, :) =  [0.2, 0.7, 5.0];
+c_r(2, :) =  [0.4, 1.3, 5.0];
 
 % third obstacle
 rmin_r(3) = 1.0;
-c_r(3, :) =  [0.2, 2.0, 0.9];
+c_r(3, :) =  [0.4, 5.0, 1.0];
 
 % fourth obstacle
 rmin_r(4) = 1.0;
-c_r(4, :) =  [0.2, 2.0, 0.4];
+c_r(4, :) =  [0.4, 5.0, 0.4];
 
 % model each obstacle with a seonf order ellipsoid
 order_r = 2;
@@ -73,7 +73,7 @@ for i = 1:N+N_obs
         order(i) = order_r;
         rmin(i) = rmin_r(i - N);
         c(i,:) = c_r(i-N, :);
-        E1(:,:,i) = E1_r(:,:,i - N);
+        E1(:,:,i) = E1_r(:,:, i - N);
         E2(:,:,i) = E2_r(:, :, i - N);
     end
 end
@@ -87,27 +87,27 @@ pmax_gen = [1.5,1.5,2.2];
 % Initial positions of agents
 po1 = [1.0, 0.0, 1.0];
 po2 = [-1.0, 0.0, 1.0];
-po3 = [1.0, 0.5, 1.0];
-po4 = [-1.0,-0.5,1.0];
+po3 = [1.0, -1.0, 1.0];
+po4 = [-1.0, 1.0,1.0];
 po5 = [1.0, -0.5, 1.0];
 po6 = [-1.0, 0.5, 1.0];
 
 % Obstacle positions
-pobs1 = [0.0, 1.0, 1.0];
-pobs2 = [0.0, -1.0, 1.0];
+pobs1 = [0.0, 1.5, 1.0];
+pobs2 = [0.0, -1.5, 1.0];
 pobs3 = [0.0, 0.0, 0.2];
 pobs4 = [0.0, 0.0, 2.0];
 
-po = cat(3,po1,po2,po3,po4,po5,po6,pobs1, pobs2, pobs3, pobs4);
+po = cat(3,po1,po2,po3,po4,pobs1, pobs2, pobs3, pobs4);
 
 % Final positions
 pf1 = [-1.0, 0.0, 1.0];
 pf2 = [1.0, 0.0, 1.0];
-pf3 = [-1.0, -0.5, 1.0];
-pf4 = [1.0, 0.5, 1.0];
+pf3 = [-1.0, 1.0, 1.0];
+pf4 = [1.0, -1.0, 1.0];
 pf5 = [-1.0, 0.5, 1.0];
 pf6 = [1.0, -0.5, 1.0];
-pf  = cat(3,pf1, pf2,pf3,pf4,pf5,pf6);
+pf  = cat(3,pf1,pf2,pf3,pf4);
 
 %%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 

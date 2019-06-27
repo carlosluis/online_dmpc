@@ -12,12 +12,13 @@ load('mpc_params.mat')
 % Choose what data to visualize
 visualize = 0;      % 3D visualization of trajectory and predictions
 view_states = 0;    % pos, vel and acc of all agents
-view_distance = 0;  % inter-agent distance over time
+view_distance = 1;  % inter-agent distance over time
 view_cost = 0;      % value of the replanning cost function
 global debug_constr;
 debug_constr = 0;
 
 use_ondemand = true;
+use_stateCA = false; % otherwise use collision avoidance in input space
 
 % Disturbance applied to the model within a time frame
 disturbance = 0;       % activate the disturbance
@@ -27,8 +28,8 @@ disturbance_k = [1:80];  % timesteps to apply the perturbation
 % We will assume that all the rogue agents are labelled after the commanded agents
 
 % Number of vehicles in the problem
-N = 5;
-N_rogues = 1;
+N = 4;
+N_rogues = 0;
 
 % Specify a specific size for rogue agents
 order_r = 4;
@@ -125,6 +126,8 @@ Phi_vel = Lambda.vel*Gamma*Beta;
 H_free = Phi'*S_free*Phi;
 H_obs = Phi'*S_obs*Phi;
 H_repel = Phi'*S_repel*Phi;
+
+Phi_ref = Gamma*Beta;
 
 % The complete Hessian is simply the sum of the two
 H_f = H_free + H_snap;
@@ -272,9 +275,15 @@ for k = 2:K
         % Include on-demand collision avoidance
         
         if use_ondemand
+            if (use_stateCA)
             [A_coll, b_coll, pf_tmp, t_build(k,i)] = ondemand_softconstraints(hor_rob(:,2:end,:,k-1), Phi,...
-                                                            X0(:,i), A0.pos, i, rmin,...
-                                                            order, E1, E2);
+                                                                              X0(:,i), A0.pos, i, rmin,...
+                                                                              order, E1, E2);
+            else                                                           
+            [A_coll, b_coll, pf_tmp, t_build(k,i)] = ondemand_softconstraints_ref(hor_ref(:,:,:,k-1), Phi_ref,...
+                                                                                 X0(:,i), i, rmin,...
+                                                                                 order, E1, E2);
+            end
 
             if ~isempty(b_coll) % collisions in the horizon
                 % Include collision constraints and slack variables
@@ -605,12 +614,16 @@ end
 %% %%%%%%%%%% PLOT INTER-AGENT DISTANCES OVER TIME %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 if view_distance
+    rmin_check = 0.25;
+    c_check = 2;
+    E_check = diag([1,1,c_check]);
+    E1_check = E_check^(-1);
     figure(6)
     for i = 1:N
         for j = 1:N
             if(i~=j)
-                differ = E1*(pos_k_i(:,:,i) - pos_k_i(:,:,j));
-                dist = (sum(differ.^order,1)).^(1/order);
+                differ = E1_check*(pos_k_i(:,:,i) - pos_k_i(:,:,j));
+                dist = (sum(differ.^order(j),1)).^(1/order(j));
                 plot(tk, dist, 'LineWidth', 1.5);
                 grid on;
                 hold on;
@@ -619,7 +632,7 @@ if view_distance
             end
         end
     end
-    plot(tk, rmin*ones(length(tk), 1), '--r', 'LineWidth', 1.5);
+    plot(tk, rmin_check*ones(length(tk), 1), '--r', 'LineWidth', 1.5);
 end
 
 %% %%%%%%%%%%%% 3D VISUALIZATION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

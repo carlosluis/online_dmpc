@@ -14,8 +14,8 @@ global debug_constr;
 debug_constr = 0;
 
 % Testing parameters
-N_vector = [2 4];
-trials = 10;
+N_vector = [10 20 30 40 50];
+trials = 50;
 
 for i = 1:N_vector(end)
     order(i) = order_a;
@@ -53,9 +53,9 @@ for p = 1:length(N_vector)
         dmpc_reachedgoal(p, q) = pass;
         dmpc_success(p, q) = ~violated && pass;
         if pass
-            dmpc_totdist(p, q) = sum(sum(sqrt(diff(ref_sample(1,:,1,:)).^2 + ...
-                                              diff(ref_sample(1,:,1,:)).^2 + ...
-                                              diff(ref_sample(1,:,1,:)).^2 )));
+            dmpc_totdist(p, q) = sum(sum(sqrt(diff(pos_k_i_sample(1,:,:)).^2 + ...
+                                              diff(pos_k_i_sample(2,:,:)).^2 + ...
+                                              diff(pos_k_i_sample(3,:,:)).^2 )));
                                           
             for i = 1:N
                 diff_goal = pos_k_i_sample(:,:,i) - repmat(pf(:,:,i),length(t),1)';
@@ -88,9 +88,9 @@ for p = 1:length(N_vector)
         dmpc2_reachedgoal(p, q) = pass;
         dmpc2_success(p, q) = ~violated && pass;
         if pass
-            dmpc2_totdist(p, q) = sum(sum(sqrt(diff(ref_sample(1,:,1,:)).^2 + ...
-                                              diff(ref_sample(1,:,1,:)).^2 + ...
-                                              diff(ref_sample(1,:,1,:)).^2 )));
+            dmpc2_totdist(p, q) = sum(sum(sqrt(diff(pos_k_i_sample(1,:,:)).^2 + ...
+                                              diff(pos_k_i_sample(2,:,:)).^2 + ...
+                                              diff(pos_k_i_sample(3,:,:)).^2 )));
                                           
             for i = 1:N
                 diff_goal = pos_k_i_sample(:,:,i) - repmat(pf(:,:,i),length(t),1)';
@@ -111,7 +111,7 @@ for p = 1:length(N_vector)
     end    
 end
 fprintf("Finished! \n")
-save('comp_input_state')
+save('comp_input_state_no_noise2')
 
 %% Post Processing
 

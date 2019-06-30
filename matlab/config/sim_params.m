@@ -14,8 +14,8 @@ model_params.tau_z = 0.3;
 model_params.omega_z = 1/model_params.tau_z;
 
 % VICON Measurements noise std for position and velocity data
-std_p = 0*0.00228682;
-std_v = 0*0.0109302;
+std_p = 0.00228682;
+std_v = 0.0109302;
 
 % Dimension of space - 3 = 3D, 2 = 2D
 ndim = 3; 
@@ -39,13 +39,15 @@ E1_a = E_a^(-1);
 E2_a = E_a^(-order_a);
 
 % Bezier curve parameters. Note that d > deg_poly always
-deg_poly = 3;  % degree of differentiability required for the position
+deg_poly = 2;  % degree of differentiability required for the position
 l = 3;         % number of Bezier curves to concatenate
 d = 5;         % degree of the bezier curve
 
 % Physical limits of the robot - position and acceleration bounds
-phys_limits.pmin = [-1.5, -1.5, 0.2];
-phys_limits.pmax = [1.5, 1.5, 2.2];
+phys_limits.pmin = [-0.7937,-0.7937,0.2];
+phys_limits.pmax = [0.7937,0.7937,1.7874];
+% phys_limits.pmin = [-1.5, -1.5, 0.2];
+% phys_limits.pmax = [1.5, 1.5, 2.2];
 phys_limits.amax = 1;
 phys_limits.amin = -1;
 

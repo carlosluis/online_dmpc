@@ -14,7 +14,7 @@ global debug_constr;
 debug_constr = 0;
 
 % Testing parameters
-N_vector = [10 20 30 40 50];
+N_vector = 4:4:20;
 trials = 50;
 
 for i = 1:N_vector(end)
@@ -27,8 +27,8 @@ end
 
 build_all_matrices;
 
-pmin_gen = [-1.5,-1.5, 0.2];
-pmax_gen = [1.5, 1.5, 2.2];
+pmin_gen = [-0.7937,-0.7937,0.2];
+pmax_gen = [0.7937,0.7937,1.7874];
 
 % Start Test
 for p = 1:length(N_vector)
@@ -38,7 +38,7 @@ for p = 1:length(N_vector)
         fprintf("Doing trial #%i with %i vehicles\n", q, N)
         
         % Generate a random set of initial and final positions
-        [po, pf] = random_test(N, pmin_gen, pmax_gen, rmin + 0.2, E1, order);
+        [po, pf] = random_test(N, pmin_gen, pmax_gen, rmin, E1, order);
         
         % Run algorithm with Collision avoidance in the state space.
         use_ondemand = true;
@@ -111,7 +111,7 @@ for p = 1:length(N_vector)
     end    
 end
 fprintf("Finished! \n")
-save('comp_input_state_no_noise2')
+save('comp_input_state_high_density_degpoly2')
 
 %% Post Processing
 

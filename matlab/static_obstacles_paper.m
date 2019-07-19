@@ -10,7 +10,7 @@ load('sim_params2.mat')
 load('mpc_params.mat')
 
 % Choose what data to visualize
-visualize = 0;      % 3D visualization of trajectory and predictions
+visualize = 1;      % 3D visualization of trajectory and predictions
 view_states = 0;    % pos, vel and acc of all agents
 view_distance = 0;  % inter-agent distance over time
 view_cost = 0;      % value of the replanning cost function
@@ -18,6 +18,7 @@ global debug_constr;
 debug_constr = 0;
 
 use_ondemand = false;
+use_softBVC = true;
 
 % Disturbance applied to the model within a time frame
 disturbance = 0;       % activate the disturbance
@@ -27,14 +28,14 @@ disturbance_k = [1:80];  % timesteps to apply the perturbation
 % We will assume that all the rogue agents are labelled after the commanded agents
 
 % Number of vehicles in the problem
-N = 1;
+N = 30;
 N_rogues = 0;
-N_obs = 1;
+N_obs = 0;
 
 % OBSTACLE DEFINITIONS
 % first obstacle
 rmin_r(1) = 1.0;
-c_r(1, :) =  [1, 1, 5.0];
+c_r(1, :) =  [0.5, 0.5, 5.0];
 
 % second obstacle
 rmin_r(2) = 1.0;
@@ -82,32 +83,32 @@ pmin_gen = [-1.5,-1.5,0.2];
 pmax_gen = [1.5,1.5,2.2];
 
 % Generate a random set of initial and final positions
-% [po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin, E1, order);
+[po, pf] = random_test_static_rogues(N, N_cmd, pmin_gen, pmax_gen, rmin, E1, order);
 
 % Initial positions of agents
-po1 = [1.0, 0.0, 1.0];
-po2 = [-1.0, -1.0, 1.0];
-po3 = [1.0, -1.0, 1.0];
-po4 = [-1.0, 1.0,1.0];
-po5 = [1.0, -0.5, 1.0];
-po6 = [-1.0, 0.5, 1.0];
-
-% Obstacle positions
-pobs1 = [0.0, 0.0, 1.0];
-pobs2 = [0.0, -1.5, 1.0];
-pobs3 = [0.0, 0.0, 0.2];
-pobs4 = [0.0, 0.0, 2.0];
-
-po = cat(3,po1,pobs1, pobs2, pobs3, pobs4);
-
-% Final positions
-pf1 = [-1.0, 0.0, 1.0];
-pf2 = [1.0, 1.0, 1.0];
-pf3 = [-1.0, 1.0, 1.0];
-pf4 = [1.0, -1.0, 1.0];
-pf5 = [-1.0, 0.5, 1.0];
-pf6 = [1.0, -0.5, 1.0];
-pf  = cat(3,pf1);
+% po1 = [1.0, 0.0, 1.0];
+% po2 = [-1.0, -1.0, 1.0];
+% po3 = [1.0, -1.0, 1.0];
+% po4 = [-1.0, 1.0,1.0];
+% po5 = [1.0, -0.5, 1.0];
+% po6 = [-1.0, 0.5, 1.0];
+% 
+% % Obstacle positions
+% pobs1 = [0.0, 0.0, 1.0];
+% pobs2 = [0.0, -1.5, 1.0];
+% pobs3 = [0.0, 0.0, 0.2];
+% pobs4 = [0.0, 0.0, 2.0];
+% 
+% po = cat(3,po1,pobs1, pobs2, pobs3, pobs4);
+% 
+% % Final positions
+% pf1 = [-1.0, 0.0, 1.0];
+% pf2 = [-1.0, -1.0, 1.0];
+% pf3 = [-1.0, 1.0, 1.0];
+% pf4 = [1.0, -1.0, 1.0];
+% pf5 = [-1.0, 0.5, 1.0];
+% pf6 = [1.0, -0.5, 1.0];
+% pf  = cat(3,pf1);
 
 %%%%%%%%%%%%%% CONSTRUCT DOUBLE INTEGRATOR MODEL AND ASSOCIATED MATRICES %%%%%%%%%
 
@@ -346,15 +347,31 @@ for k = 2:K
         else % Use BVC constraints
             x_length = (d+1) * ndim * l;
             t_start = tic;
-            [A_coll, b_coll] = BVC_constraints_ref(X0_ref, d, i, rmin, order, E1, E2, x_length);
-            t_build(k,i) = toc(t_start);
-            A_in_i = [A_in; A_coll];
-            b_in_i = [b_in; b_coll];
-            A_eq_i = A_eq;
-            H_i = H_f;
-            f_eps = [];
-            mat_f_x0_i = mat_f_x0_free;
-            f_tot = f_pf_free(:,:,i);
+            if (use_softBVC)
+                [A_coll, b_coll] = softBVC_constraints_ref(X0_ref, d, i, rmin, order, E1, E2, x_length);
+                t_build(k,i) = toc(t_start);
+                N_v = length(b_coll) / 3;
+                A_in_i = [A_in zeros(size(A_in,1), N_v) ; A_coll];
+                b_in_i = [b_in; b_coll];
+                A_eq_i = [A_eq zeros(size(A_eq,1), N_v)];
+                f_eps = .0001*lin_coll_penalty*ones(1, N_v);
+                H_eps = .0001*quad_coll_penalty*eye(N_v);
+                H_i = [H_o zeros(size(H_f,1), N_v);
+                           zeros(N_v,size(H_f,2)) H_eps];
+                mat_f_x0_i = mat_f_x0_obs;
+                f_tot = f_pf_obs(:,:,i);
+                
+            else
+                [A_coll, b_coll] = BVC_constraints_ref(X0_ref, d, i, rmin, order, E1, E2, x_length);
+                t_build(k,i) = toc(t_start);
+                A_in_i = [A_in; A_coll];
+                b_in_i = [b_in; b_coll];
+                A_eq_i = A_eq;
+                H_i = H_f;
+                f_eps = [];
+                mat_f_x0_i = mat_f_x0_free;
+                f_tot = f_pf_free(:,:,i);
+            end
         end
         
         % Solve QP

@@ -14,7 +14,7 @@ global debug_constr;
 debug_constr = 0;
 
 % Testing parameters
-N_vector = 4:4:20;
+N_vector = 10:10:50;
 trials = 50;
 
 for i = 1:N_vector(end)
@@ -27,8 +27,11 @@ end
 
 build_all_matrices;
 
-pmin_gen = [-0.7937,-0.7937,0.2];
-pmax_gen = [0.7937,0.7937,1.7874];
+% pmin_gen = [-0.7937,-0.7937,0.2];
+% pmax_gen = [0.7937,0.7937,1.7874];
+
+pmin_gen = [-1.5, -1.5, 0.2];
+pmax_gen = [1.5, 1.5, 2.2];
 
 % Start Test
 for p = 1:length(N_vector)
@@ -43,7 +46,9 @@ for p = 1:length(N_vector)
         % Run algorithm with Collision avoidance in the state space.
         use_ondemand = true;
         use_repel = false;
-        use_stateCA = true;
+        use_stateCA = false;
+        deg_poly = 2;
+        build_all_matrices;
         run_algorithm;
         
         % record the metrics for comparison
@@ -79,6 +84,8 @@ for p = 1:length(N_vector)
         use_ondemand = true;
         use_repel = false;
         use_stateCA = false;
+        deg_poly = 3;
+        build_all_matrices;
         run_algorithm;
         
         % record the metrics for comparison
@@ -111,7 +118,7 @@ for p = 1:length(N_vector)
     end    
 end
 fprintf("Finished! \n")
-save('comp_input_state_high_density_degpoly2')
+save('comp_deg_poly_inputspace_highpenalty')
 
 %% Post Processing
 

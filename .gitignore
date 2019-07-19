@@ -16,3 +16,5 @@ cpp/cmake-build-release/
 cpp/lib/
 
 matlab/data/
+
+*.avi

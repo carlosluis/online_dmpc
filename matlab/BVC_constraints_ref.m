@@ -21,7 +21,7 @@ for j = 1:N
        differ = (E2(:,:,j)*(p_i-p_j).^(order(j)-1))'; % Transpose of the difference
        
        % Right side of inequality constraint
-       r = dist^(order(j)-1)*((rmin(j)/2+dist/2) - dist + differ*p_i/(dist^(order(j)-1)));
+       r = dist^(order(j)-1)*((rmin(j)) - dist + differ*p_i/(dist^(order(j)-1)));
        
        % the diff 1x3 vector must multiply all the control points of the
        % first segment of the Bezier curve, except the first one

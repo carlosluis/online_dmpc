@@ -33,7 +33,7 @@ for k = 1:K
         yticks([-1  1]);
         xlim([phys_limits.pmin(1), phys_limits.pmax(1)])
         ylim([phys_limits.pmin(2), phys_limits.pmax(2)])
-        zlim([0, 4])
+        zlim([-10, 10])
         plot(pos_k_i(1,k,i), pos_k_i(2,k,i), 'o',...
                          'LineWidth', 1.5, 'Color',colors(i,:), ...
                          'MarkerEdgeColor','k',...
@@ -51,7 +51,7 @@ for k = 1:K
                                % negative values put the label below the axis
         set(yh,'position',p)   % set the new position
     end
-    for i = N_cmd + 1: N
+    for i = N_cmd + 1: N + N_obs
         % Plot rouge agents sphere for better visualization
         v = ((x-pos_k_i(1,k,i))/c(i,1)).^(order(i)) + ((y-pos_k_i(2,k,i))/c(i,2)).^(order(i)) + ...
             ((z-pos_k_i(3,k,i))/c(i,3)).^(order(i)) - (rmin(i)-0.2)^order(i);

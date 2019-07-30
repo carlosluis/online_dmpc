@@ -17,8 +17,9 @@ view_cost = 0;      % value of the replanning cost function
 global debug_constr;
 debug_constr = 0;
 
-use_ondemand = true;
+use_ondemand = false;
 use_stateCA = false; % otherwise use collision avoidance in input space
+use_softBVC = true;
 
 % Disturbance applied to the model within a time frame
 disturbance = 0;       % activate the disturbance
@@ -321,15 +322,31 @@ for k = 2:K
         else % Use BVC constraints
             x_length = (d+1) * ndim * l;
             t_start = tic;
-            [A_coll, b_coll] = BVC_constraints_ref(X0_ref, d, i, rmin, order, E1, E2, x_length);
-            t_build(k,i) = toc(t_start);
-            A_in_i = [A_in; A_coll];
-            b_in_i = [b_in; b_coll];
-            A_eq_i = A_eq;
-            H_i = H_f;
-            f_eps = [];
-            mat_f_x0_i = mat_f_x0_free;
-            f_tot = f_pf_free(:,:,i);
+            if (use_softBVC)
+                [A_coll, b_coll] = softBVC_constraints_ref(X0_ref, d, i, rmin, order, E1, E2, x_length);
+                t_build(k,i) = toc(t_start);
+                N_v = length(b_coll) / 3;
+                A_in_i = [A_in zeros(size(A_in,1), N_v) ; A_coll];
+                b_in_i = [b_in; b_coll];
+                A_eq_i = [A_eq zeros(size(A_eq,1), N_v)];
+                f_eps = 100*lin_coll_penalty*ones(1, N_v);
+                H_eps = 1*quad_coll_penalty*eye(N_v);
+                H_i = [H_o zeros(size(H_f,1), N_v);
+                           zeros(N_v,size(H_f,2)) H_eps];
+                mat_f_x0_i = mat_f_x0_obs;
+                f_tot = f_pf_obs(:,:,i);
+                
+            else
+                [A_coll, b_coll] = BVC_constraints_ref(X0_ref, d, i, rmin, order, E1, E2, x_length);
+                t_build(k,i) = toc(t_start);
+                A_in_i = [A_in; A_coll];
+                b_in_i = [b_in; b_coll];
+                A_eq_i = A_eq;
+                H_i = H_f;
+                f_eps = [];
+                mat_f_x0_i = mat_f_x0_free;
+                f_tot = f_pf_free(:,:,i);
+            end
         end
         
         % Solve QP

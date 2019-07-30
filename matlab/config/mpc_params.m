@@ -22,7 +22,7 @@ s_repel = 1000;
 spd_r = 10;
 
 %%%%%%%%%% Collision relaxation penalty %%%%%%%%%%%%
-lin_coll_penalty = -1e4;
+lin_coll_penalty = -5e4;
 quad_coll_penalty = 1;
 
 %%%%%%%%%% Tolerances to trigger a replan %%%%%%%%%%%%

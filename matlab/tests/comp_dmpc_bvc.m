@@ -192,7 +192,7 @@ for p = 1:length(N_vector)
     end    
 end
 fprintf("Finished! \n")
-save('comp_allCA')
+save('comp_allCA_3')
 
 %% Post Processing
 

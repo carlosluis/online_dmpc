@@ -126,8 +126,8 @@ for k = 2:K
                 A_in_i = [A_in zeros(size(A_in,1), N_v) ; A_coll];
                 b_in_i = [b_in; b_coll];
                 A_eq_i = [A_eq zeros(size(A_eq,1), N_v)];
-                f_eps = .0001*lin_coll_penalty*ones(1, N_v);
-                H_eps = .0001*quad_coll_penalty*eye(N_v);
+                f_eps = .01*lin_coll_penalty*ones(1, N_v);
+                H_eps = .01*quad_coll_penalty*eye(N_v);
                 H_i = [H_o zeros(size(H_f,1), N_v);
                            zeros(N_v,size(H_f,2)) H_eps];
                 mat_f_x0_i = mat_f_x0_obs;
@@ -222,8 +222,8 @@ end
 
 % Check if collision constraints were not violated
 violated = false;
-rmin_check = 0.15;
-c_check = 3;
+rmin_check = 0.2;
+c_check = 2.5;
 E_check = diag([1,1,c_check]);
 E1_check = E_check^(-1);
 

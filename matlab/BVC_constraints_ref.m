@@ -2,7 +2,7 @@ function [A_coll, b_coll] = BVC_constraints_ref(X0_ref, d, i, rmin, order, E1, E
 
 % Construct the hyperspace constraints that will limit the first
 % segment of the Bezier curve to lie within the BVC.
-dh = d + 1;
+dh = d;
 N = size(X0_ref, 3);
 p_i = X0_ref(:, 1, i);
 idx = 1;

@@ -223,7 +223,7 @@ end
 % Check if collision constraints were not violated
 violated = false;
 rmin_check = 0.2;
-c_check = 2.5;
+c_check = 2.25;
 E_check = diag([1,1,c_check]);
 E1_check = E_check^(-1);
 
@@ -244,5 +244,5 @@ for i = 1:N
 end
 
 % Check if all vehicles reached their goals.
-pass = reached_goal(pos_k_i(:,:,1:N), pf, 0.2, N);
+pass = reached_goal(pos_k_i(:,:,1:N), pf, 0.15, N);
 

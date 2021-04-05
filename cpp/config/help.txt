@@ -1,0 +1,73 @@
+{
+  "N": 4,               // Number of agents to be simulated
+  "Ncmd": 4,            // Number of agents to be controlled by algorithm, the last N-Ncmd agents
+                        // act as static obstacles during the execution of trajectories
+  "test": "default",    // possible values: -"default": initial and goal locations are po and pf
+                        //                  -"random": randomly generate initial and goal locations
+  "solver": "qpoases",  // only supported solver is qpoases
+
+// Initial locations in case of "default" test case. specified
+  "po":[
+    [xo1, yo1, zo1],
+    [xo2, yo2, zo2],
+    [xo3, yo3, zo3],
+    [xo4, yo4, zo4],
+  ],
+
+// Goal locations in case of "default" test case. specified
+  "pf":[
+    [xf1, yf1, zf1],
+    [xf2, yf2, zf2],
+    [xf3, yf3, zf3],
+    [xf4, yf4, zf4],
+  ],
+
+// Bezier polynomial parameters
+  "d": 5,             // Degree of polynomial, in this case 5th degree
+  "num_segments": 3,  // Number of Bezier polynomials to concatenate
+  "deg_poly": 3,      // Number of degrees to enforce continuity in concatenating points
+  "dim": 3,           // Degree of the space, i.e., 3D
+  "t_segment": 0.5,   // The time length, in seconds, for each Bezier polynomial segment
+
+// Parameters of the second-order system of drone + controller 
+  "zeta_xy": 0.6502,
+  "tau_xy": 0.3815,
+  "zeta_z": 0.9103,
+  "tau_z": 0.3,
+
+// MPC Parameters 
+  "k_hor": 16,        // Horizon length in number of time steps
+  "h": 0.1,           // Time step duration, in seconds
+  "ts": 0.01,         // Time scale for trajectory interpolation, in seconds
+
+// MPC costs - see paper 
+  "s_free": 100,
+  "s_obs": 100,
+  "s_repel": 1000,
+  "spd_f": 3,
+  "spd_o": 1,
+  "spd_r": 10,
+  "lin_coll": -100000,
+  "quad_coll": 1,
+  "acc_cost": 0.008,
+
+// Dimensions of the workspace in format [x, y, z]
+  "pmin": [-1.5, -1.5, 0.2],
+  "pmax": [1.5, 1.5, 2.2],
+  "amin": [-1.0, -1.0, -1.0],
+  "amax": [1.0, 1.0, 1.0],
+
+// Collision boundary parameters for agents
+  "rmin": 0.3,              // radius of ellipsoid
+  "order": 2,               // order of ellipsoid
+  "height_scaling": 2.0,    // vertical scaling
+
+// Collision boundary parameters for static obstacles
+  "rmin_obs": 0.5,
+  "order_obs": 2,
+  "height_scaling_obs": 4.0,
+
+// Standard deviation of position and velocity measurements from a motion capture system, in meters
+  "std_position": 0.00228682,
+  "std_velocity": 0.0109302
+}

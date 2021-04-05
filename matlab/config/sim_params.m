@@ -32,7 +32,7 @@ T_segment = 1.0; % fixed time length of each Bezier segment
 
 % Collision ellipsoid parameters
 order_a = 2;         % order of the ellipsoid - choose between 2 and 4
-rmin_a = 0.35;       % X-Y protection radius for collisions
+rmin_a = 0.3;       % X-Y protection radius for collisions
 c_a = [1.0, 1.0, 2.0];           % Z radius is equal to rmin*c
 E_a = diag(c_a); % scaling vector to compute distances to ellipsoid 
 E1_a = E_a^(-1);
@@ -44,10 +44,10 @@ l = 3;         % number of Bezier curves to concatenate
 d = 5;         % degree of the bezier curve
 
 % Physical limits of the robot - position and acceleration bounds
-phys_limits.pmin = [-0.7937,-0.7937,0.2];
-phys_limits.pmax = [0.7937,0.7937,1.7874];
-% phys_limits.pmin = [-1.5, -1.5, 0.2];
-% phys_limits.pmax = [1.5, 1.5, 2.2];
+% phys_limits.pmin = [-0.7937,-0.7937,0.2];
+% phys_limits.pmax = [0.7937,0.7937,1.7874];
+phys_limits.pmin = [-1.5, -1.5, 0.2];
+phys_limits.pmax = [1.5, 1.5, 2.2];
 phys_limits.amax = 1;
 phys_limits.amin = -1;
 

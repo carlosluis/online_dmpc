@@ -2,7 +2,7 @@ clc
 clear
 close all
 
-load('comp_allCA_3.mat')
+load('comp_allCA.mat')
 green = [0.55,0.71,0]; %apple green
 
 % Probability of success plots
@@ -98,6 +98,7 @@ hold on;
 box on;
 xticks([4:4:20]);
 xlim([2,22])
+ylim([5,22])
 
 h1 = plot(N_vector, tqp_bvc,':b', 'Linewidth',2.5);
 plot(N_vector, tqp_bvc,'ob', 'MarkerFaceColor', 'b','Linewidth',1,'markers',10);

@@ -44,8 +44,6 @@ Generator::Params Simulator::parseJSON(std::ifstream& config_file) {
 
     if (!solver_name.compare("qpoases"))
         qp_solver = kQpoases;
-    else if (!solver_name.compare("ooqp"))
-        qp_solver = kOoqp;
     else
         throw std::invalid_argument("Invalid solver '" + solver_name + " '");
 

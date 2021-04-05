@@ -12,8 +12,6 @@
 #include <thread>
 
 typedef enum {
-    kQuadprog,
-    kOoqp,
     kQpoases
 } Solver;
 

@@ -7,7 +7,7 @@ using namespace Eigen;
 using namespace std::chrono;
 
 int main() {
-	cout << "Hello world!" << endl;
+	cout << "Solving multi-robot motion planning problem..." << endl;
 
     std::ifstream my_config_file("../config/config.json");
     assert(my_config_file && "Couldn't find the config file");
@@ -18,8 +18,8 @@ int main() {
     sim.run(T);
 
     // Save data to file
-    char const *file = "/home/carlos/repos/bezier_dmpc/cpp/results/trajectories.txt";
-    sim.saveDataToFile(file);
+    string file = "../results/trajectories.txt";
+    sim.saveDataToFile(file.c_str());
 
 	return 0;
 }

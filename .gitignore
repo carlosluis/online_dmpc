@@ -5,6 +5,8 @@ cpp/bin/
 
 cpp/build/
 
+build/
+
 *.swp
 
 cpp/\.idea/
@@ -18,3 +20,5 @@ cpp/lib/
 matlab/data/
 
 *.avi
+
+.vscode/

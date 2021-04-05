@@ -1,5 +1,5 @@
 {
-  "N": 4,
+  "N": 4, 
   "Ncmd": 4,
   "test": "default",
   "solver": "qpoases",

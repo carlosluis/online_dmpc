@@ -247,9 +247,7 @@ void Generator::solveCluster(const std::vector<State3D> &current_states,
 
         // Create a new solver pointer of base class
         unique_ptr<BaseSolver> solver;
-        if (_solver_name == kOoqp)
-            solver = make_unique<OOQP>();
-        else if (_solver_name == kQpoases)
+        if (_solver_name == kQpoases)
             solver = make_unique<QpOASES>();
 
         // Solve QP and get solution vector x

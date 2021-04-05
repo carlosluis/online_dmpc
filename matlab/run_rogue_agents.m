@@ -17,9 +17,9 @@ view_cost = 0;      % value of the replanning cost function
 global debug_constr;
 debug_constr = 0;
 
-use_ondemand = false;
+use_ondemand = true;
 use_stateCA = false; % otherwise use collision avoidance in input space
-use_softBVC = true;
+use_softBVC = false;
 
 % Disturbance applied to the model within a time frame
 disturbance = 0;       % activate the disturbance
